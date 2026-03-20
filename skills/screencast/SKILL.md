@@ -5,6 +5,15 @@ description: "Live-streams the browser screencast over WebSocket so others can w
 
 # screencast
 
+```mermaid
+flowchart TD
+    Chrome["Chrome\n(CDP)"] -- "JPEG frames\nvia CDP WebSocket" --> Relay["Relay Server\nlocalhost:3456"]
+    Relay -- "binary frames\nvia WebSocket" --> Viewers["Viewers\n(any browser)"]
+    Viewers -- "GET /" --> Relay
+```
+
+No video encoding. No ffmpeg. Chrome sends JPEG frames via CDP, the relay forwards raw bytes over WebSocket. Viewers display frames in an `<img>` tag. Sub-100ms latency.
+
 Live-stream your browser to a shareable URL. Connects to Chrome via CDP, relays screencast frames over WebSocket to any number of viewers.
 
 ## Prerequisites
@@ -109,14 +118,3 @@ tailscale serve 3456
 
 - `ssh -R 80:localhost:3456 serveo.net`
 - `npx localtunnel --port 3456`
-
-## How It Works
-
-```mermaid
-flowchart TD
-    Chrome["Chrome\n(CDP)"] -- "JPEG frames\nvia CDP WebSocket" --> Relay["Relay Server\nlocalhost:3456"]
-    Relay -- "binary frames\nvia WebSocket" --> Viewers["Viewers\n(any browser)"]
-    Viewers -- "GET /" --> Relay
-```
-
-No video encoding. No ffmpeg. Chrome sends JPEG frames via CDP, the relay forwards raw bytes over WebSocket. Viewers display frames in an `<img>` tag. Sub-100ms latency.
