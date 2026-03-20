@@ -43,9 +43,13 @@ Replace `<url>` with the page the user wants to screencast (can be `https://...`
 
 The script auto-discovers the CDP connection from agent-browser. Do not pass a CDP URL manually.
 
+Run `scripts/server.py` (relative to this skill's directory) with `uv run`:
+
 ```bash
-PYTHONUNBUFFERED=1 uv run https://raw.githubusercontent.com/o-az/skills/main/skills/screencast/scripts/server.py > /tmp/screencast-relay.log 2>&1 &
+PYTHONUNBUFFERED=1 uv run <SKILL_DIR>/scripts/server.py > /tmp/screencast-relay.log 2>&1 &
 ```
+
+Replace `<SKILL_DIR>` with the absolute path to this skill's directory (the directory containing this SKILL.md).
 
 ### 3. Verify the relay is running
 
@@ -96,7 +100,7 @@ All via environment variables (set before the `uv run` command):
 When the browser is viewing a `file://` URL, the relay automatically watches that directory and reloads the browser on file changes. Override with `WATCH`:
 
 ```bash
-WATCH=./my-site PYTHONUNBUFFERED=1 uv run skills/screencast/scripts/server.py > /tmp/screencast-relay.log 2>&1 &
+WATCH=./my-site PYTHONUNBUFFERED=1 uv run <SKILL_DIR>/scripts/server.py > /tmp/screencast-relay.log 2>&1 &
 ```
 
 ## Sharing Publicly (only when asked)
@@ -117,4 +121,4 @@ tailscale serve 3456
 **Other options:**
 
 - `ssh -R 80:localhost:3456 serveo.net`
-- `npx localtunnel --port 3456`
+- `npx wrangler@latest tunnel quick-start http://localhost:3456`
