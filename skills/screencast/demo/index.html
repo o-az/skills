@@ -1,0 +1,45 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Demo - Live Counter</title>
+    <style>
+      body {
+        background: #0f172a;
+        color: #e2e8f0;
+        font-family: system-ui;
+        display: grid;
+        place-items: center;
+        height: 100vh;
+        margin: 0;
+      }
+      h1 {
+        font-size: 4rem;
+      }
+      .updated {
+        color: #4ade80;
+        font-weight: bold;
+      }
+      .counter {
+        color: #f472b6;
+        font-size: 2rem;
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h1>Hello from Screencast 🎬</h1>
+      <p style="font-size: 1.5rem; margin-top: 1rem; color: #94a3b8">live reload is working!</p>
+      <p class="updated" style="font-size: 1.2rem; margin-top: 0.5rem">🎉 Live counter demo</p>
+      <p class="counter" style="margin-top: 1rem">⏱️ <span id="counter">0</span> seconds</p>
+    </div>
+    <script>
+      let seconds = 0;
+      setInterval(() => {
+        seconds++;
+        document.getElementById("counter").textContent = seconds;
+      }, 1000);
+    </script>
+  </body>
+</html>
