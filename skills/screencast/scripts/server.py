@@ -41,9 +41,9 @@ import websockets
 from websockets.http11 import Response
 
 PORT = int(os.environ.get("PORT", "3456"))
-QUALITY = int(os.environ.get("QUALITY", "60"))
-MAX_WIDTH = int(os.environ.get("MAX_WIDTH", "1280"))
-MAX_HEIGHT = int(os.environ.get("MAX_HEIGHT", "720"))
+QUALITY = int(os.environ.get("QUALITY", "40"))
+MAX_WIDTH = int(os.environ.get("MAX_WIDTH", "960"))
+MAX_HEIGHT = int(os.environ.get("MAX_HEIGHT", "540"))
 EVERY_NTH = int(os.environ.get("EVERY_NTH", "1"))
 
 # --- CDP discovery ---
@@ -275,6 +275,7 @@ async def main():
 
     viewers: set[websockets.ServerConnection] = set()
     frame_number = 0
+    latest_frame: bytes | None = None
     latest_meta = {"width": 0, "height": 0}
 
     async def broadcast_viewer_count():
@@ -282,7 +283,7 @@ async def main():
         websockets.broadcast(viewers, msg)
 
     def on_screencast_frame(params):
-        nonlocal frame_number, latest_meta
+        nonlocal frame_number, latest_frame, latest_meta
         data = params["data"]
         metadata = params["metadata"]
         session_id = params["sessionId"]
@@ -296,6 +297,7 @@ async def main():
             return
 
         binary = base64.b64decode(data)
+        latest_frame = binary
         latest_meta = {
             "width": metadata.get("deviceWidth", 0) or 0,
             "height": metadata.get("deviceHeight", 0) or 0,
@@ -343,6 +345,8 @@ async def main():
         viewers.add(ws)
         try:
             await ws.send(json.dumps({"type": "meta", **latest_meta}))
+            if latest_frame is not None:
+                await ws.send(latest_frame)
             await broadcast_viewer_count()
             print(f"[relay] Viewer connected ({len(viewers)} total)", flush=True)
             async for _ in ws:

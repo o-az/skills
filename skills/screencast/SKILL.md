@@ -14,52 +14,45 @@ flowchart TD
 
 No video encoding. No ffmpeg. Chrome sends JPEG frames via CDP, the relay forwards raw bytes over WebSocket. Viewers display frames in an `<img>` tag. Sub-100ms latency.
 
-Live-stream your browser to a shareable URL. Connects to Chrome via CDP, relays screencast frames over WebSocket to any number of viewers.
-
 ## Prerequisites
 
 - **agent-browser** CLI (used to open pages and interact with Chrome)
 - **uv** (recommended) or Python 3.11+ with `websockets` installed
 
-## Do NOT
+## Rules
 
-- Do NOT manually search for Chrome, launch Chrome, or look for CDP ports. The relay script and agent-browser handle all of this.
+- Do NOT manually search for Chrome, launch Chrome, or look for CDP ports. The scripts and agent-browser handle all of this.
 - Do NOT try to expose the relay publicly (tailscale, localtunnel, ngrok, etc.) unless the user explicitly asks. The viewer URL is `http://localhost:3456`.
-- Do NOT read or inspect `server.py`. Just run it.
+- Do NOT read or inspect `server.py` or `start-relay.sh`. Just run them.
+- Do NOT chain commands with `&&` or `;` in any step. Run each step as its own Bash tool call.
 
 ## Steps
 
-Follow these steps **in order**. Do not skip or reorder.
+Follow these steps **in order**. Each step is a **separate** Bash tool call.
 
-### 1. Open the target page
+### Step 1 — Open the target page
 
 ```bash
-agent-browser open <url>
+AGENT_BROWSER_STREAM_PORT=9223 agent-browser open <URL>
 ```
 
-Replace `<url>` with the page the user wants to screencast (can be `https://...` or `file:///...`).
+Replace `<URL>` with the page the user wants to screencast.
 
-### 2. Start the relay
+### Step 2 — Start the relay
 
-The script auto-discovers the CDP connection from agent-browser. Do not pass a CDP URL manually.
-
-Run `scripts/server.py` (relative to this skill's directory) with `uv run`:
+Run the start script. It backgrounds the server, waits for it to be healthy, and returns. **Do not add `&` or modify this command.**
 
 ```bash
-PYTHONUNBUFFERED=1 uv run <SKILL_DIR>/scripts/server.py > /tmp/screencast-relay.log 2>&1 &
+bash <SKILL_DIR>/scripts/start-relay.sh <SKILL_DIR>
 ```
 
 Replace `<SKILL_DIR>` with the absolute path to this skill's directory (the directory containing this SKILL.md).
 
-### 3. Verify the relay is running
+Expected output: `Relay is running. Viewer URL: http://localhost:3456` followed by a JSON health response.
 
-```bash
-sleep 3 && curl -s http://localhost:3456/health
-```
+If it prints an error, read `/tmp/screencast-relay.log` for diagnostics.
 
-Expected: `{"status":"ok", ...}`
-
-### 4. Reload the page to push the first frame
+### Step 3 — Push the first frame
 
 Chrome only sends a frame when the page visually changes. Without this step, viewers see "waiting for frames...".
 
@@ -67,7 +60,7 @@ Chrome only sends a frame when the page visually changes. Without this step, vie
 agent-browser eval "location.reload()"
 ```
 
-### 5. Share the viewer URL
+### Step 4 — Share the viewer URL
 
 Tell the user:
 
@@ -83,15 +76,15 @@ pkill -f "server.py"
 
 ## Configuration
 
-All via environment variables (set before the `uv run` command):
+All via environment variables (set before the `bash start-relay.sh` command):
 
 | Variable     | Default | Description                                                                                   |
 | ------------ | ------- | --------------------------------------------------------------------------------------------- |
 | `PORT`       | 3456    | HTTP/WS port for viewer connections                                                           |
 | `CDP_URL`    | —       | Chrome CDP WebSocket URL (auto-discovered — rarely needed)                                    |
-| `QUALITY`    | 60      | JPEG quality 1-100                                                                            |
-| `MAX_WIDTH`  | 1280    | Max frame width                                                                               |
-| `MAX_HEIGHT` | 720     | Max frame height                                                                              |
+| `QUALITY`    | 40      | JPEG quality 1-100 (lower = faster FPS)                                                       |
+| `MAX_WIDTH`  | 960     | Max frame width (lower = faster FPS)                                                          |
+| `MAX_HEIGHT` | 540     | Max frame height (lower = faster FPS)                                                         |
 | `EVERY_NTH`  | 1       | Send every Nth frame (1 = all)                                                                |
 | `WATCH`      | —       | Directory to watch for file changes (auto-reloads browser). Auto-detected for `file://` URLs. |
 
@@ -100,7 +93,7 @@ All via environment variables (set before the `uv run` command):
 When the browser is viewing a `file://` URL, the relay automatically watches that directory and reloads the browser on file changes. Override with `WATCH`:
 
 ```bash
-WATCH=./my-site PYTHONUNBUFFERED=1 uv run <SKILL_DIR>/scripts/server.py > /tmp/screencast-relay.log 2>&1 &
+WATCH=./my-site bash <SKILL_DIR>/scripts/start-relay.sh <SKILL_DIR>
 ```
 
 ## Sharing Publicly (only when asked)

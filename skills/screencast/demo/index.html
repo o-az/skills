@@ -25,10 +25,12 @@
     <script>
       const clock = document.getElementById("clock");
       const tick = () => {
-        clock.textContent = new Date().toLocaleTimeString("en-GB");
+        const d = new Date();
+        clock.textContent =
+          d.toLocaleTimeString("en-GB") + "." + String(d.getMilliseconds()).padStart(3, "0");
       };
       tick();
-      setInterval(tick, 1000);
+      setInterval(tick, 5);
     </script>
   </body>
 </html>
