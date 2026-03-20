@@ -1,12 +1,13 @@
 # Skills
 
-Hand-crafted [agent skills](https://github.com/vercel-labs/skills) I built for my own workflows. Each one solves a real problem I kept running into.
+Hand-crafted [agent skills](https://skills.sh) I built for my own workflows. Each one solves a real problem I kept running into.
 
 ## What's in here
 
-| Skill                               | What it does                                                                                 |
-| ----------------------------------- | -------------------------------------------------------------------------------------------- |
-| [upload-image](skills/upload-image) | Uploads images to imgbb — local files, URLs, SVGs, base64, whatever. No more manual hosting. |
+| Skill                                | What it does                                                                                                                                                |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [asciinema](/skills/asciinema)       | Record, upload, and GIF-convert terminal sessions with [`asciinema`](https://github.com/asciinema/asciinema) and [`agg`](https://github.com/asciinema/agg). |
+| [upload-image](/skills/upload-image) | Uploads images to [imgbb](https://ibb.co) — local files, URLs, SVGs, base64, whatever. No more manual hosting.                                              |
 
 ## Use them
 
