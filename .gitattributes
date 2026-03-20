@@ -1,0 +1,4 @@
+* text=auto
+.gitattributes !filter !diff
+
+bun.lock linguist-language=JSON-with-Comments
