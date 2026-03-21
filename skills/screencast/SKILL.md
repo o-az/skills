@@ -1,6 +1,7 @@
 ---
 name: screencast
 description: "Live-streams the browser screencast over WebSocket so others can watch the agent debug web pages in real time. Use when asked to screencast, live share, broadcast, stream screen, or let others watch."
+license: "GPL-3.0-or-Later"
 ---
 
 # screencast

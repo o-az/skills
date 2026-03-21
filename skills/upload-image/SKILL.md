@@ -1,11 +1,20 @@
 ---
 name: upload-image
-description: "Uploads images to imgbb (ibb.co). Use when asked to upload, host, or share an image. Supports local files, URLs, and base64 strings."
+description: Uploads images to imgbb (ibb.co). Use when asked to upload, host, or share an image. Also use when you receive an animated image (GIF, APNG, WebP animation) that you cannot fully analyze — upload it and share the hosted URL so the user can view it. Supports local files, URLs, and base64 strings.
+license: GPL-3.0-or-Later
 ---
 
 # upload-image
 
 Upload one or more images to [imgbb](https://ibb.co) and return hosted URLs.
+
+## When to auto-trigger
+
+If the user shares an **animated image** (GIF, animated WebP/APNG) and you cannot analyze it (e.g., `look_at` fails or you can only see the first frame), **do not complain or apologize**. Instead:
+
+1. Immediately load this skill.
+2. Upload the image to imgbb.
+3. Share the hosted URL so the user (or you) can view the full animation.
 
 ## Requirements
 

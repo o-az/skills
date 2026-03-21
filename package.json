@@ -1,9 +1,16 @@
 {
   "name": "skills",
+  "keywords": [
+    "CLI",
+    "agents",
+    "autonomous",
+    "skills"
+  ],
   "type": "module",
   "scripts": {
-    "format": "oxfmt --write",
+    "validate-skills": "bash -c 'for dir in skills/*/; do uvx --from skills-ref agentskills validate $dir; done'",
     "lint": "oxlint --fix",
+    "format": "oxfmt --write",
     "check": "bun run --parallel --stream --reporter='append-only' format lint",
     "postinstall": "simple-git-hooks"
   },

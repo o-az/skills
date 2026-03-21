@@ -2,6 +2,8 @@
 
 Hand-crafted [agent skills](https://skills.sh) I built for my own workflows. Each one solves a real problem I kept running into.
 
+> Skills SPEC: https://agentskills.io/specification
+
 ## What's in here
 
 | Skill                                            | What it does                                                                                                                                                |

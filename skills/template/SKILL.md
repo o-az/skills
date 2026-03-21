@@ -1,6 +1,7 @@
 ---
-name: skill-name
+name: template
 description: "One sentence — what it does and when to activate (include trigger phrases)."
+license: "GPL-3.0-or-Later"
 metadata:
   author: o-az
   version: "1.0.0"

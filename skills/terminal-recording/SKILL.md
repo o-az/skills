@@ -1,6 +1,7 @@
 ---
 name: terminal-recording
 description: "Record, upload, and convert terminal sessions using asciinema and agg. Use when the user says 'record session', 'asciinema', 'terminal recording', 'record my terminal', or wants to capture a terminal session as a cast file or gif."
+license: "GPL-3.0-or-Later"
 metadata:
   author: o-az
   version: "1.0.0"
