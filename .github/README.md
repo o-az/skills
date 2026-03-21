@@ -8,6 +8,7 @@ Hand-crafted [agent skills](https://skills.sh) I built for my own workflows. Eac
 
 | Skill                                            | What it does                                                                                                                                                |
 | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [manipulating-video](/skills/manipulating-video) | Manipulate video files with `ffmpeg` — speed up/slow down, resize, compress, convert formats, extract audio, convert to GIF, trim, merge, and more.         |
 | [screencast](/skills/screencast)                 | Live-stream browser screencasts over WebSocket so others can watch in real time.                                                                            |
 | [terminal-recording](/skills/terminal-recording) | Record, upload, and GIF-convert terminal sessions with [`asciinema`](https://github.com/asciinema/asciinema) and [`agg`](https://github.com/asciinema/agg). |
 | [upload-image](/skills/upload-image)             | Uploads images to [imgbb](https://ibb.co) — local files, URLs, SVGs, base64, whatever. No more manual hosting.                                              |
