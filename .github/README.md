@@ -1,8 +1,5 @@
 # Skills
 
-> [!INFO] What are "Skills"?
-> Skills are reusable capabilities for AI agents. They provide procedural knowledge that helps agents accomplish specific tasks more effectively. Skills can include code generation patterns, domain expertise, tool integrations, and more. [skills.sh](https://skills.sh/docs/faq)
-
 Hand-crafted Skills I built for my workflows. Each one solves a real problem I kept running into.
 
 ## What's in here
@@ -13,6 +10,10 @@ Hand-crafted Skills I built for my workflows. Each one solves a real problem I k
 | [screencast](/skills/screencast)                 | Live-stream browser screencasts over WebSocket so others can watch in real time.                                                                                                        |
 | [terminal-recording](/skills/terminal-recording) | Record, upload, and GIF-convert terminal sessions with [`asciinema`](https://github.com/asciinema/asciinema) and [`agg`](https://github.com/asciinema/agg).                             |
 | [upload-image](/skills/upload-image)             | Uploads images to [imgbb](https://ibb.co) — local files, URLs, SVGs, base64, whatever. No more manual hosting.                                                                          |
+
+> [!NOTE]
+> Skills are reusable capabilities for AI agents. They provide procedural knowledge that helps agents accomplish specific tasks more effectively. Skills can include code generation patterns, domain expertise, tool integrations, and more.
+> <sub>[skills.sh](https://skills.sh/docs/faq)</sub>
 
 ## How do I use <skill-name>?
 
