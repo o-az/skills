@@ -30,4 +30,4 @@ lerna-debug.log*
 .DS_Store
 _
 
-skills/**/evals/workspace/
+**/evals/workspace/

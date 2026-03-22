@@ -2,8 +2,6 @@
 
 Hand-crafted Skills I built for my workflows. Each one solves a real problem I kept running into.
 
-## What's in here
-
 | Skill                                            | What it does                                                                                                                                                                            |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [manipulating-video](/skills/manipulating-video) | Manipulate video files with [`ffmpeg`](https://github.com/ffmpeg/ffmpeg) — speed up/slow down, resize, compress, convert formats, extract audio, convert to GIF, trim, merge, and more. |
@@ -56,11 +54,11 @@ Iteration 1 evals were run for every skill in this repo. Benchmarks compare `wit
 
 Benchmarks:
 
-- [`skills/manipulating-video/evals/workspace/iteration-1/benchmark.json`](/skills/manipulating-video/evals/workspace/iteration-1/benchmark.json)
-- [`skills/screencast/evals/workspace/iteration-1/benchmark.json`](/skills/screencast/evals/workspace/iteration-1/benchmark.json)
-- [`skills/template/evals/workspace/iteration-1/benchmark.json`](/skills/template/evals/workspace/iteration-1/benchmark.json)
-- [`skills/terminal-recording/evals/workspace/iteration-1/benchmark.json`](/skills/terminal-recording/evals/workspace/iteration-1/benchmark.json)
-- [`skills/upload-image/evals/workspace/iteration-1/benchmark.json`](/skills/upload-image/evals/workspace/iteration-1/benchmark.json)
+- [`evals/manipulating-video/workspace/iteration-1/benchmark.json`](/evals/manipulating-video/workspace/iteration-1/benchmark.json)
+- [`evals/screencast/workspace/iteration-1/benchmark.json`](/evals/screencast/workspace/iteration-1/benchmark.json)
+- [`evals/template/workspace/iteration-1/benchmark.json`](/evals/template/workspace/iteration-1/benchmark.json)
+- [`evals/terminal-recording/workspace/iteration-1/benchmark.json`](/evals/terminal-recording/workspace/iteration-1/benchmark.json)
+- [`evals/upload-image/workspace/iteration-1/benchmark.json`](/evals/upload-image/workspace/iteration-1/benchmark.json)
 
 <details>
 
