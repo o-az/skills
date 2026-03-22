@@ -1,23 +1,12 @@
-# prod
 dist/
-
-# dev
 .yarn/
-!.yarn/releases
-.idea/workspace.xml
-.idea/usage.statistics.xml
-.idea/shelf
-
-# deps
+.idea/
 node_modules/
 .wrangler
-
-# env
 .env
-.env.production
+.env.*
+!.env.example
 .dev.vars
-
-# logs
 logs/
 *.log
 npm-debug.log*
@@ -25,9 +14,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-# misc
 .DS_Store
-_
-
 **/evals/workspace/
+_
+package-lock.json
+pnpm-lock.yaml
+yarn.lock

@@ -8,10 +8,10 @@
   ],
   "type": "module",
   "scripts": {
-    "validate-skills": "bash -c 'for dir in skills/*/; do uvx --from skills-ref agentskills validate $dir; done'",
     "lint": "oxlint --fix",
     "format": "oxfmt --write",
     "check": "bun run --parallel --stream --reporter='append-only' format lint",
+    "validate-skills": "bash -c 'for dir in skills/*/; do uvx --from skills-ref agentskills validate $dir; done'",
     "postinstall": "simple-git-hooks"
   },
   "devDependencies": {
@@ -22,5 +22,8 @@
   },
   "simple-git-hooks": {
     "pre-commit": "bun prek run --all-files --config='.github/.pre-commit.yml' && bun check"
-  }
+  },
+  "trustedDependencies": [
+    "@j178/prek"
+  ]
 }
