@@ -24,3 +24,26 @@ npx skills@latest add o-az/skills --skill <skill-name>
 1. Drop a folder in `skills/`
 2. Add a `SKILL.md` with `name` and `description` frontmatter
 3. That's it. No build step, no config, no ceremony.
+
+<details>
+<summary>Eval Results</summary>
+
+Iteration 1 evals were run for every skill in this repo. Benchmarks compare `with_skill` against a baseline run.
+
+| Skill                | With Skill | Baseline |   Delta |
+| -------------------- | ---------: | -------: | ------: |
+| `manipulating-video` |     1.0000 |   0.3611 | +0.6389 |
+| `screencast`         |     1.0000 |   0.5000 | +0.5000 |
+| `template`           |     1.0000 |   0.0000 | +1.0000 |
+| `terminal-recording` |     1.0000 |   0.4167 | +0.5833 |
+| `upload-image`       |     1.0000 |   0.2222 | +0.7778 |
+
+Benchmarks:
+
+- [`skills/manipulating-video/evals/workspace/iteration-1/benchmark.json`](/skills/manipulating-video/evals/workspace/iteration-1/benchmark.json)
+- [`skills/screencast/evals/workspace/iteration-1/benchmark.json`](/skills/screencast/evals/workspace/iteration-1/benchmark.json)
+- [`skills/template/evals/workspace/iteration-1/benchmark.json`](/skills/template/evals/workspace/iteration-1/benchmark.json)
+- [`skills/terminal-recording/evals/workspace/iteration-1/benchmark.json`](/skills/terminal-recording/evals/workspace/iteration-1/benchmark.json)
+- [`skills/upload-image/evals/workspace/iteration-1/benchmark.json`](/skills/upload-image/evals/workspace/iteration-1/benchmark.json)
+
+</details>

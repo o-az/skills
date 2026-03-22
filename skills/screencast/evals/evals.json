@@ -1,0 +1,36 @@
+{
+  "skill_name": "screencast",
+  "evals": [
+    {
+      "id": "start-local-broadcast",
+      "prompt": "Open https://example.com in the browser and start a local screencast so I can watch it.",
+      "expected_output": "The page is opened, the relay is started through the bundled script, the browser is nudged to emit a frame, and the user gets the localhost viewer URL.",
+      "assertions": [
+        "The workflow opens the requested page with agent-browser",
+        "The relay is started with bash scripts/start-relay.sh",
+        "The workflow reloads or otherwise changes the page so Chrome sends the first frame",
+        "The final response includes http://localhost:3456 or the configured local viewer URL"
+      ]
+    },
+    {
+      "id": "watch-local-files",
+      "prompt": "Screencast my local file-based prototype and watch ./demo for changes so viewers see reloads automatically.",
+      "expected_output": "The relay starts with WATCH set to the requested directory and the response explains the local viewer URL.",
+      "assertions": [
+        "The start command uses the WATCH environment variable",
+        "The relay is started via the bundled start script",
+        "The response does not expose the relay publicly unless explicitly asked"
+      ]
+    },
+    {
+      "id": "public-sharing-request",
+      "prompt": "Start the screencast and give me a public URL using Tailscale Funnel.",
+      "expected_output": "The local screencast is started first, then a public sharing command is provided or run only because the user explicitly asked for it.",
+      "assertions": [
+        "The local relay is started before public sharing is addressed",
+        "The response uses an explicitly requested public-sharing mechanism rather than assuming one",
+        "The answer still includes the local viewer URL as the primary relay endpoint"
+      ]
+    }
+  ]
+}

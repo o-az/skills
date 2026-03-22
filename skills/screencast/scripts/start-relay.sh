@@ -1,14 +1,41 @@
 #!/usr/bin/env bash
 # Starts the screencast relay server as a detached background process.
-# Usage: ./start-relay.sh <skill_dir>
-#
-# This script exists because AI agents consistently fail to append "&"
-# to background long-running processes. This script handles all of that
-# internally so the agent's Bash tool call returns immediately.
+# Run from the skill root: bash scripts/start-relay.sh
 
 set -euo pipefail
 
-SKILL_DIR="${1:?Usage: start-relay.sh <skill_dir>}"
+usage() {
+  cat <<'EOF'
+Usage: bash scripts/start-relay.sh
+
+Starts the screencast relay in the background, waits for /health, then prints:
+- a human-readable viewer URL
+- the JSON /health response
+
+Configuration is provided via environment variables:
+  PORT        HTTP/WS port for the viewer (default: 3456)
+  CDP_URL     Explicit Chrome DevTools websocket URL
+  QUALITY     JPEG quality 1-100 (default: 40)
+  MAX_WIDTH   Max frame width (default: 960)
+  MAX_HEIGHT  Max frame height (default: 540)
+  EVERY_NTH   Send every Nth frame (default: 1)
+  WATCH       Directory to watch for file changes
+EOF
+}
+
+if [ "${1:-}" = "--help" ]; then
+  usage
+  exit 0
+fi
+
+if [ $# -ne 0 ]; then
+  echo "ERROR: unexpected arguments." >&2
+  usage >&2
+  exit 2
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SCRIPT="$SKILL_DIR/scripts/server.py"
 LOG="/tmp/screencast-relay.log"
 HEALTH_URL="http://localhost:${PORT:-3456}/health"

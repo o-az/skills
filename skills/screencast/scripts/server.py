@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["websockets"]
+# dependencies = ["websockets==15.0.1"]
 # ///
 
 """
@@ -10,23 +10,24 @@ Connects to Chrome via CDP, subscribes to Page.screencastFrame events,
 and relays JPEG frames to all connected viewers over WebSocket.
 
 Usage:
-  python server.py                          # auto-discover CDP from agent-browser
-  python server.py ws://127.0.0.1:9222/...  # explicit CDP URL
-  CDP_URL=ws://... python server.py         # via env
+  uv run scripts/server.py
+  uv run scripts/server.py --cdp-url ws://127.0.0.1:9222/...
+  CDP_URL=ws://... uv run scripts/server.py
 
 Env:
   CDP_URL        - Chrome DevTools Protocol WebSocket URL
   PORT           - HTTP/WS port (default: 3456)
-  QUALITY        - JPEG quality 1-100 (default: 60)
-  MAX_WIDTH      - Max frame width (default: 1280)
-  MAX_HEIGHT     - Max frame height (default: 720)
+  QUALITY        - JPEG quality 1-100 (default: 40)
+  MAX_WIDTH      - Max frame width (default: 960)
+  MAX_HEIGHT     - Max frame height (default: 540)
   EVERY_NTH      - Only send every Nth frame (default: 1)
 
 Requirements:
-  pip install websockets
+  uv run installs the inline dependencies declared above
 """
 
 import asyncio
+import argparse
 import base64
 import json
 import os
@@ -258,12 +259,80 @@ VIEWER_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Relay Chrome screencast frames to browser viewers over HTTP/WebSocket."
+        )
+    )
+    parser.add_argument(
+        "legacy_cdp_url",
+        nargs="?",
+        help="Legacy positional Chrome DevTools websocket URL.",
+    )
+    parser.add_argument(
+        "--cdp-url",
+        help="Explicit Chrome DevTools websocket URL. Overrides CDP_URL.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=PORT,
+        help="HTTP/WS port for viewers. Default: %(default)s",
+    )
+    parser.add_argument(
+        "--quality",
+        type=int,
+        default=QUALITY,
+        help="JPEG quality 1-100. Default: %(default)s",
+    )
+    parser.add_argument(
+        "--max-width",
+        type=int,
+        default=MAX_WIDTH,
+        help="Maximum frame width. Default: %(default)s",
+    )
+    parser.add_argument(
+        "--max-height",
+        type=int,
+        default=MAX_HEIGHT,
+        help="Maximum frame height. Default: %(default)s",
+    )
+    parser.add_argument(
+        "--every-nth",
+        type=int,
+        default=EVERY_NTH,
+        help="Forward every Nth frame. Default: %(default)s",
+    )
+    args = parser.parse_args()
+    if args.quality < 1 or args.quality > 100:
+        parser.error("--quality must be between 1 and 100")
+    if args.port < 1 or args.port > 65535:
+        parser.error("--port must be between 1 and 65535")
+    if args.every_nth < 1:
+        parser.error("--every-nth must be >= 1")
+    return args
+
 VIEWER_HTML_BYTES = VIEWER_HTML.encode()
 
 # --- Main ---
 
 
 async def main():
+    args = parse_args()
+
+    global PORT, QUALITY, MAX_WIDTH, MAX_HEIGHT, EVERY_NTH
+    PORT = args.port
+    QUALITY = args.quality
+    MAX_WIDTH = args.max_width
+    MAX_HEIGHT = args.max_height
+    EVERY_NTH = args.every_nth
+    if args.cdp_url:
+        os.environ["CDP_URL"] = args.cdp_url
+    elif args.legacy_cdp_url:
+        os.environ["CDP_URL"] = args.legacy_cdp_url
+
     cdp_browser_url = discover_cdp_url()
     print(f"[relay] CDP browser: {cdp_browser_url}", flush=True)
 

@@ -1,0 +1,26 @@
+{
+  "skill_name": "template",
+  "evals": [
+    {
+      "id": "new-skill-skeleton",
+      "prompt": "Create a new skill for extracting tables from PDFs and include the key sections the skill file should have.",
+      "expected_output": "A concise skill skeleton with frontmatter, clear trigger text, prerequisites, available scripts or references, and a workflow section.",
+      "assertions": [
+        "The generated skill includes YAML frontmatter with name and description",
+        "The description explains what the skill does and when to activate it",
+        "The body includes prerequisites and workflow guidance",
+        "The body includes an evals section or points to evals/evals.json"
+      ]
+    },
+    {
+      "id": "scripted-skill-template",
+      "prompt": "Show me a skill template for a task that uses a bundled script.",
+      "expected_output": "A template that references scripts with relative paths, lists the available scripts, and avoids absolute-path placeholders.",
+      "assertions": [
+        "The script references use relative paths like scripts/tool.py",
+        "The template includes an Available scripts section",
+        "The template encourages agent-friendly script interfaces such as --help or structured output"
+      ]
+    }
+  ]
+}

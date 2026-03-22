@@ -39,6 +39,29 @@ Uses `ffmpeg` to perform common video manipulations. All commands use absolute p
 - Use `-y` to auto-overwrite output files without prompting.
 - Use hardware acceleration when available (`-hwaccel auto`).
 
+## Agent Checklist
+
+Use this order every time:
+
+1. Probe the input with `ffprobe`.
+2. Choose a new output path before running `ffmpeg`.
+3. Pick the command for the requested operation.
+4. Run the command with `2>&1`.
+5. Tell the user exactly which file you wrote.
+
+## Output Naming
+
+Prefer predictable suffixes so the user can find the result:
+
+| Request       | Suggested output        |
+| ------------- | ----------------------- |
+| Compress      | `<name>_compressed.mp4` |
+| GIF           | `<name>.gif`            |
+| Remove audio  | `<name>_muted.mp4`      |
+| Extract audio | `<name>.m4a`            |
+| Trim clip     | `<name>_trimmed.mp4`    |
+| Resize        | `<name>_resized.mp4`    |
+
 ## Instructions
 
 ### Step 0 — Inspect the input

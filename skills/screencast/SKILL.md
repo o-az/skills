@@ -18,13 +18,17 @@ No video encoding. No ffmpeg. Chrome sends JPEG frames via CDP, the relay forwar
 ## Prerequisites
 
 - **agent-browser** CLI (used to open pages and interact with Chrome)
-- **uv** (recommended) or Python 3.11+ with `websockets` installed
+- **uv** to run the bundled Python relay script with its inline dependencies
+
+## Available scripts
+
+- `scripts/start-relay.sh` - Starts the relay in the background, waits for health, and prints the viewer URL plus JSON health output.
+- `scripts/server.py` - Relay implementation. Run `uv run scripts/server.py --help` to inspect its interface when needed.
 
 ## Rules
 
 - Do NOT manually search for Chrome, launch Chrome, or look for CDP ports. The scripts and agent-browser handle all of this.
 - Do NOT try to expose the relay publicly (tailscale, localtunnel, ngrok, etc.) unless the user explicitly asks. The viewer URL is `http://localhost:3456`.
-- Do NOT read or inspect `server.py` or `start-relay.sh`. Just run them.
 - Do NOT chain commands with `&&` or `;` in any step. Run each step as its own Bash tool call.
 
 ## Steps
@@ -41,13 +45,11 @@ Replace `<URL>` with the page the user wants to screencast.
 
 ### Step 2 — Start the relay
 
-Run the start script. It backgrounds the server, waits for it to be healthy, and returns. **Do not add `&` or modify this command.**
+Run the start script from the skill root. It backgrounds the server, waits for it to be healthy, and returns. **Do not add `&` or modify this command.**
 
 ```bash
-bash <SKILL_DIR>/scripts/start-relay.sh <SKILL_DIR>
+bash scripts/start-relay.sh
 ```
-
-Replace `<SKILL_DIR>` with the absolute path to this skill's directory (the directory containing this SKILL.md).
 
 Expected output: `Relay is running. Viewer URL: http://localhost:3456` followed by a JSON health response.
 
@@ -61,7 +63,19 @@ Chrome only sends a frame when the page visually changes. Without this step, vie
 agent-browser eval "location.reload()"
 ```
 
-### Step 4 — Share the viewer URL
+`agent-browser eval` usually prints `null` here. That still counts as success.
+
+### Step 4 — Verify the relay is receiving frames
+
+Run a health check before telling the user the screencast is live:
+
+```bash
+curl -s http://localhost:3456/health
+```
+
+Expected result: JSON with `"status":"ok"` and `frames` greater than `0`.
+
+### Step 5 — Share the viewer URL
 
 Tell the user:
 
@@ -94,8 +108,16 @@ All via environment variables (set before the `bash start-relay.sh` command):
 When the browser is viewing a `file://` URL, the relay automatically watches that directory and reloads the browser on file changes. Override with `WATCH`:
 
 ```bash
-WATCH=./my-site bash <SKILL_DIR>/scripts/start-relay.sh <SKILL_DIR>
+WATCH=./my-site bash scripts/start-relay.sh
 ```
+
+After starting the relay, edit a file in that directory and then check:
+
+```bash
+curl -s http://localhost:3456/health
+```
+
+The screencast should remain healthy and continue serving frames.
 
 ## Sharing Publicly (only when asked)
 
