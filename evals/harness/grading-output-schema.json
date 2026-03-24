@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://skills.local/evals/grading-output-schema.json",
+  "title": "Eval Grading Output",
+  "type": "object",
+  "required": ["overall", "assertions"],
+  "properties": {
+    "overall": {
+      "type": "object",
+      "required": ["score", "pass_rate", "environment_failure", "grading_failure", "summary"],
+      "properties": {
+        "score": {
+          "type": ["number", "null"]
+        },
+        "pass_rate": {
+          "type": ["number", "null"]
+        },
+        "environment_failure": {
+          "type": "boolean"
+        },
+        "grading_failure": {
+          "type": "boolean"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "assertions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "result", "evidence"],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string",
+            "enum": ["pass", "fail", "not-applicable"]
+          },
+          "evidence": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

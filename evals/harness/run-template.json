@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "skill_name": "<skill-name>",
+  "iteration": 1,
+  "runs_per_eval": 5,
+  "configs": ["with_skill", "without_skill"],
+  "evals": [
+    {
+      "id": "<eval-id>",
+      "prompt": "<copied from evals/<skill>/evals/evals.json>",
+      "fixtures": {
+        "<relative/path/from-run-fixtures-dir>": "<fixture-spec-or-copy-source>"
+      }
+    }
+  ]
+}

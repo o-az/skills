@@ -16,6 +16,15 @@ pnpm-debug.log*
 lerna-debug.log*
 .DS_Store
 **/evals/workspace/
+evals/*/workspace/
+evals/harness/workspace/
+
+# Low-signal eval artifacts
+codex.*
+ffmpeg*
+pass[12].log
+probe.stderr
+palette.std*
 _
 package-lock.json
 pnpm-lock.yaml

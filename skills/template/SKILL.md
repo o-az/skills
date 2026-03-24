@@ -37,7 +37,7 @@ One short paragraph describing the skill's purpose and main workflow.
 ## Available scripts
 
 - `scripts/example.sh` - Short description of what it does.
-- `scripts/example.py` - Mention `uv run scripts/example.py --help` if applicable.
+- `scripts/example.py` - Document a real `--help` command, for example `uv run scripts/example.py --help`.
 
 ## References
 
@@ -49,34 +49,22 @@ One short paragraph describing the skill's purpose and main workflow.
 ### 1. Inspect or validate inputs
 
 ```bash
-example command
+example command 2>&1
 ```
-````
-
-````
 
 ### 2. Run the main workflow
 
 ```bash
-bash scripts/example.sh "$INPUT"
-````
+bash scripts/example.sh "$INPUT" 2>&1
+```
 
 ### 3. Summarize outputs
 
 State what files, URLs, or structured output to return to the user.
 
-````
+## Evals
 
-## Rules
-
-- Reference bundled files with relative paths such as `scripts/tool.py`, not absolute placeholders.
-- If a script exists, make it non-interactive and document `--help`.
-- Prefer structured output on stdout and diagnostics on stderr for bundled scripts.
-- Add `evals/evals.json` with at least 2 realistic prompts before considering the skill complete.
-
-## Eval starter
-
-Create `evals/evals.json` like this:
+Create `evals/evals.json` with at least 2 realistic prompts before considering the skill complete.
 
 ```json
 {
@@ -86,12 +74,23 @@ Create `evals/evals.json` like this:
       "id": "basic-flow",
       "prompt": "Realistic user request here.",
       "expected_output": "What success looks like.",
-      "assertions": [
-        "Concrete observable requirement 1",
-        "Concrete observable requirement 2"
-      ]
+      "assertions": ["Concrete observable requirement 1", "Concrete observable requirement 2"]
+    },
+    {
+      "id": "edge-case",
+      "prompt": "A realistic edge case for this skill.",
+      "expected_output": "Expected behavior for the edge case.",
+      "assertions": ["Concrete observable requirement 1", "Concrete observable requirement 2"]
     }
   ]
 }
 ```
 ````
+
+## Rules
+
+- Reference bundled files with relative paths such as `scripts/tool.py`, not absolute placeholders.
+- If a script exists, make it non-interactive and document `--help` with a concrete command.
+- Prefer structured output on stdout and diagnostics on stderr for bundled scripts.
+- Keep eval guidance inside the template body so it does not get dropped.
+- Add `evals/evals.json` with at least 2 realistic prompts before considering the skill complete.

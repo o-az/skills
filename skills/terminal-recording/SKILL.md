@@ -13,11 +13,11 @@ Record terminal sessions with [asciinema](https://asciinema.org), upload them, a
 
 ## Requirements
 
-- `asciinema` CLI installed
+- `asciinema` CLI installed (**v3+** for `--headless` in `scripts/headless-record.sh`)
 - `agg` CLI installed (for GIF conversion)
 - `curl` and `jq` installed for the bundled helper scripts
 - `kitty` optional for launching the recorder in a separate terminal window
-- `IBB_API_KEY` only if using `scripts/finalize-recording.sh --upload-gif`
+- `IBB_API_KEY` required when hosting GIFs with `scripts/finalize-recording.sh --upload-gif`
 
 ## When to Use
 
@@ -93,6 +93,8 @@ When the user says **"done"**:
 
    This prints the same JSON plus `gif_url`.
 
+   This is the preferred hosted-GIF path and aligns with the `upload-image` skill's hosting contract (imgbb + deletion support).
+
 4. Present results:
 
    ```
@@ -134,6 +136,14 @@ The command prints the asciinema.org URL to stdout.
 ```bash
 agg /path/to/recording.cast /path/to/output.gif
 ```
+
+To host the GIF, either load `upload-image` and upload the generated GIF, or use:
+
+```bash
+bash scripts/finalize-recording.sh /path/to/recording.cast --upload-gif
+```
+
+Do not switch to random hosts (imgur, catbox, etc.) unless the user explicitly requests a different provider.
 
 Or use the bundled helper to do both upload and GIF rendering in one step:
 

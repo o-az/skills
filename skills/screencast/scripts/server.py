@@ -15,6 +15,7 @@ Usage:
   CDP_URL=ws://... uv run scripts/server.py
 
 Env:
+  BIND_HOST      - HTTP/WS bind host (default: 127.0.0.1)
   CDP_URL        - Chrome DevTools Protocol WebSocket URL
   PORT           - HTTP/WS port (default: 3456)
   QUALITY        - JPEG quality 1-100 (default: 40)
@@ -41,6 +42,7 @@ from urllib.request import urlopen
 import websockets
 from websockets.http11 import Response
 
+BIND_HOST = os.environ.get("BIND_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "3456"))
 QUALITY = int(os.environ.get("QUALITY", "40"))
 MAX_WIDTH = int(os.environ.get("MAX_WIDTH", "960"))
@@ -276,6 +278,11 @@ def parse_args() -> argparse.Namespace:
         help="Explicit Chrome DevTools websocket URL. Overrides CDP_URL.",
     )
     parser.add_argument(
+        "--bind-host",
+        default=BIND_HOST,
+        help="Bind host for HTTP/WS server. Default: %(default)s",
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=PORT,
@@ -312,6 +319,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--port must be between 1 and 65535")
     if args.every_nth < 1:
         parser.error("--every-nth must be >= 1")
+    if not args.bind_host:
+        parser.error("--bind-host must not be empty")
     return args
 
 VIEWER_HTML_BYTES = VIEWER_HTML.encode()
@@ -322,7 +331,8 @@ VIEWER_HTML_BYTES = VIEWER_HTML.encode()
 async def main():
     args = parse_args()
 
-    global PORT, QUALITY, MAX_WIDTH, MAX_HEIGHT, EVERY_NTH
+    global BIND_HOST, PORT, QUALITY, MAX_WIDTH, MAX_HEIGHT, EVERY_NTH
+    BIND_HOST = args.bind_host
     PORT = args.port
     QUALITY = args.quality
     MAX_WIDTH = args.max_width
@@ -393,6 +403,7 @@ async def main():
                 "status": "ok",
                 "viewers": len(viewers),
                 "frames": frame_number,
+                "bind_host": BIND_HOST,
                 "meta": latest_meta,
             }).encode()
             return Response(
@@ -469,10 +480,15 @@ async def main():
         print(f"[relay] Watching {watch_dir} for changes", flush=True)
 
     async with websockets.serve(
-        handler, "0.0.0.0", PORT, process_request=process_request
+        handler, BIND_HOST, PORT, process_request=process_request
     ):
+        if BIND_HOST in {"127.0.0.1", "localhost"}:
+            viewer_host = "localhost"
+        else:
+            viewer_host = BIND_HOST
         print(f"[relay] Viewer page: http://localhost:{PORT}", flush=True)
         print(f"[relay] Health check: http://localhost:{PORT}/health", flush=True)
+        print(f"[relay] Bound to {BIND_HOST}:{PORT} (viewer host hint: {viewer_host})", flush=True)
 
         shutdown_event = asyncio.Event()
         loop = asyncio.get_running_loop()

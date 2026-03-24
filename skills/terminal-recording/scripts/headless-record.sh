@@ -34,6 +34,19 @@ shift
 
 mkdir -p "$(dirname "$CAST_PATH")"
 
+if ! command -v asciinema >/dev/null 2>&1; then
+  echo "Error: asciinema is required." >&2
+  exit 1
+fi
+
+if ! asciinema rec --help 2>&1 | grep -q -- '--headless'; then
+  cat >&2 <<'EOF'
+Error: asciinema does not support --headless.
+Use asciinema >= 3.x or run interactive recording instead.
+EOF
+  exit 1
+fi
+
 asciinema rec --overwrite --headless --command "$*" "$CAST_PATH" >/tmp/terminal-recording-headless.log 2>&1
 
 jq -n --arg cast_path "$CAST_PATH" '{cast_path:$cast_path}'

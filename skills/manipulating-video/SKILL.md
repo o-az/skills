@@ -44,10 +44,11 @@ Uses `ffmpeg` to perform common video manipulations. All commands use absolute p
 Use this order every time:
 
 1. Probe the input with `ffprobe`.
-2. Choose a new output path before running `ffmpeg`.
-3. Pick the command for the requested operation.
-4. Run the command with `2>&1`.
-5. Tell the user exactly which file you wrote.
+2. Check probe output for audio streams and note `has_audio=true/false`.
+3. Choose a new output path before running `ffmpeg`.
+4. Pick the command for the requested operation and match audio flags to `has_audio`.
+5. Run the command with `2>&1`.
+6. Tell the user exactly which file you wrote.
 
 ## Output Naming
 
@@ -73,6 +74,8 @@ ffprobe -v error -show_entries format=duration,size,bit_rate -show_entries strea
 ```
 
 Note whether audio streams exist — this determines whether to include audio filters/mappings.
+
+If there are no audio streams, avoid audio mappings/filters/codec flags such as `-map 0:a`, `-af`, `-c:a`, `-b:a`, or `atempo`.
 
 ### Speed up / slow down
 
@@ -168,6 +171,8 @@ ffmpeg -y -i "<INPUT>" -vn -c:a copy "<OUTPUT.m4a>" 2>&1
 Or re-encode: `-c:a libmp3lame -q:a 2` for MP3, `-c:a libopus -b:a 128k` for Opus.
 
 ### Remove audio
+
+Check Step 0 first. If the input already has no audio stream, tell the user no mute transform is needed and avoid running a redundant command.
 
 ```bash
 ffmpeg -y -i "<INPUT>" -an -c:v copy "<OUTPUT>" 2>&1

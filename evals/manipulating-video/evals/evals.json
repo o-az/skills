@@ -29,7 +29,8 @@
       "expected_output": "A new muted video file or a clear explanation that the source has no audio stream, based on probe results.",
       "assertions": [
         "The workflow checks whether an audio stream exists",
-        "The command avoids mapping or filtering nonexistent audio",
+        "The command or response avoids mapping or filtering nonexistent audio",
+        "If no audio stream exists, the response states that no mute transform is required",
         "The original input file remains unchanged"
       ]
     }

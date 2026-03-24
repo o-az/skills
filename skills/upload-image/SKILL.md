@@ -37,24 +37,33 @@ The skill accepts any of these as input:
 
 Determine the input type and prepare the curl `-F` flag accordingly:
 
+`@` in `-F "image=@/path/to/file.png"` means "upload file contents". Without `@`, curl sends the literal path string and the upload fails.
+
 - **Local image file** (png, jpg, gif, bmp, webp, tiff, heic):
 
   ```bash
   -F "image=@/path/to/file.png"
   ```
 
-- **Local SVG file**: Convert to PNG first, then upload the PNG:
+- **Local SVG file**: Convert to PNG first, then upload the PNG. Try `magick` first; if it fails (e.g., missing fonts for `<text>` elements), fall back to `sips` on macOS:
 
   ```bash
-  magick /path/to/icon.svg /tmp/icon.png
+  CONVERTED=false
+  if command -v magick >/dev/null 2>&1; then
+    if magick /path/to/icon.svg /tmp/icon.png 2>/dev/null && test -f /tmp/icon.png; then
+      CONVERTED=true
+    fi
+  fi
+  if [ "$CONVERTED" = false ]; then
+    if command -v sips >/dev/null 2>&1; then
+      sips -s format png /path/to/icon.svg --out /tmp/icon.png 2>/dev/null
+      test -f /tmp/icon.png && CONVERTED=true
+    fi
+  fi
   # then use -F "image=@/tmp/icon.png"
   ```
 
-  On macOS without `ImageMagick`, use the built-in `sips`:
-
-  ```bash
-  sips -s format png /path/to/icon.svg --out /tmp/icon.png
-  ```
+  If both converters fail, return a clear error instead of uploading the raw SVG.
 
 - **URL**: Pass the URL string directly:
 
@@ -70,9 +79,9 @@ Determine the input type and prepare the curl `-F` flag accordingly:
 ### 2. Upload
 
 ```bash
-curl -s -X POST "https://api.imgbb.com/1/upload" \
+RESPONSE="$(curl -s -X POST "https://api.imgbb.com/1/upload" \
   -F "key=$IBB_API_KEY" \
-  -F "image=@/path/to/file.png"
+  -F "image=@/path/to/file.png")"
 ```
 
 To set an expiration (TTL in seconds), add:
@@ -85,7 +94,21 @@ Common TTL values: `3600` (1 hour), `86400` (1 day), `604800` (1 week). Omit for
 
 ### 3. Parse and present the response
 
-Extract fields from the JSON response and present them in this format:
+Extract these fields from the response JSON:
+
+- direct URL: `.data.url`
+- viewer URL: `.data.url_viewer`
+- delete URL: `.data.delete_url`
+
+Example parser:
+
+```bash
+DIRECT_URL="$(jq -r '.data.url // empty' <<<"$RESPONSE")"
+VIEWER_URL="$(jq -r '.data.url_viewer // empty' <<<"$RESPONSE")"
+DELETE_URL="$(jq -r '.data.delete_url // empty' <<<"$RESPONSE")"
+```
+
+Then present the result in this format:
 
 ```
 ✅ Uploaded: filename.png

@@ -14,11 +14,12 @@
     },
     {
       "id": "watch-local-files",
-      "prompt": "Screencast my local file-based prototype and watch ./demo for changes so viewers see reloads automatically.",
+      "prompt": "Screencast my local file-based prototype and watch ./demo for changes so viewers see reloads automatically. Use WATCH=./demo.",
       "expected_output": "The relay starts with WATCH set to the requested directory and the response explains the local viewer URL.",
       "assertions": [
         "The start command uses the WATCH environment variable",
         "The relay is started via the bundled start script",
+        "The workflow confirms relay health after start",
         "The response does not expose the relay publicly unless explicitly asked"
       ]
     },

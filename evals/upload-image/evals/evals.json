@@ -23,10 +23,11 @@
     },
     {
       "id": "animated-image-fallback",
-      "prompt": "I attached an animated GIF and you can't inspect all the frames. Make it viewable for me.",
-      "expected_output": "The skill is auto-triggered, the animation is uploaded, and the user receives a hosted URL instead of an apology about limited analysis.",
+      "prompt": "Use /tmp/test-animation.gif as the attached animated GIF (you can't inspect all frames). Make it viewable for me.",
+      "expected_output": "The skill is auto-triggered, the fixture animation is uploaded, and the user receives a hosted URL instead of an apology about limited analysis.",
       "assertions": [
         "The flow uploads the animation instead of declining due to tooling limits",
+        "The workflow uses the provided animated fixture path",
         "The response provides a hosted URL the user can open",
         "The instructions do not expose the API key"
       ]

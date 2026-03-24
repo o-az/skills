@@ -9,7 +9,8 @@
         "The generated skill includes YAML frontmatter with name and description",
         "The description explains what the skill does and when to activate it",
         "The body includes prerequisites and workflow guidance",
-        "The body includes an evals section or points to evals/evals.json"
+        "The body includes an evals section or points to evals/evals.json",
+        "The template does not include broken or dangling markdown code fences"
       ]
     },
     {

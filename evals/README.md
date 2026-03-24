@@ -9,6 +9,55 @@ Each skill has:
 
 Do not put eval specs back inside `skills/<skill-name>/`. Installed skills should stay lean.
 
+## Harness First
+
+Before running a new iteration, bootstrap the canonical workspace using the harness scripts:
+
+```bash
+bash evals/harness/scripts/example-run.sh --skill <SKILL_NAME> --iteration <N> --runs <RUNS>
+```
+
+To run the full lifecycle (prepare + execute + independent grade + benchmark + schema validation):
+
+```bash
+bash evals/harness/scripts/run-eval.sh \
+  --skill <SKILL_NAME> \
+  --iteration <N> \
+  --runs <RUNS> \
+  --log-level progress \
+  --executor-cmd '<EXECUTOR_COMMAND>' \
+  --grader-cmd '<GRADER_COMMAND>'
+```
+
+Use `--log-level quiet|progress|stream` depending on how much live terminal output you want.
+
+Recommended runtime adapters:
+
+```bash
+--executor-cmd 'bash "$EVAL_REPO_ROOT/evals/harness/scripts/agent-executor.sh" --runtime amp --mode smart'
+--grader-cmd 'bash "$EVAL_REPO_ROOT/evals/harness/scripts/agent-grader.sh" --runtime codex'
+```
+
+This creates:
+
+1. `run-plan.json` with fixed eval IDs/configs/runs.
+2. `environment.json` with tool/env availability.
+3. Per-run `fixtures/`, `logs/`, `outputs/`, `artifacts/`, `prompt.txt`, and `fixture-status.json`.
+
+After grading completes, produce a canonical benchmark schema output:
+
+```bash
+bash evals/harness/scripts/build-benchmark.sh --skill <SKILL_NAME> --iteration <N>
+```
+
+Use [`evals/harness/benchmark-schema.json`](./harness/benchmark-schema.json) as the source-of-truth benchmark format.
+
+If you need to compare old iteration benchmark files with schema drift, normalize them first:
+
+```bash
+bash evals/harness/scripts/normalize-legacy-benchmark.sh <legacy-benchmark.json>
+```
+
 ## Repeated Eval Prompt
 
 Use this prompt for an agent, replacing `<SKILL_NAME>` and `<RUNS>`:
@@ -18,12 +67,12 @@ Evaluate the skill at `skills/<SKILL_NAME>` using the eval spec at `evals/<SKILL
 
 Requirements:
 - Do not change `SKILL.md`, the eval spec, grading criteria, or the skill implementation.
-- Create or reuse `evals/<SKILL_NAME>/workspace/iteration-2/`.
+- Create or reuse `evals/<SKILL_NAME>/workspace/iteration-<N>/`.
 - For each eval case, run it `<RUNS>` times.
 - Save results under this layout:
 
-  `evals/<SKILL_NAME>/workspace/iteration-2/eval-<id>/run-<NN>/with_skill/`
-  `evals/<SKILL_NAME>/workspace/iteration-2/eval-<id>/run-<NN>/without_skill/`
+  `evals/<SKILL_NAME>/workspace/iteration-<N>/eval-<id>/run-<NN>/with_skill/`
+  `evals/<SKILL_NAME>/workspace/iteration-<N>/eval-<id>/run-<NN>/without_skill/`
 
 For every run/config:
 - create `outputs/`
@@ -32,7 +81,7 @@ For every run/config:
 - save `grading.json`
 
 Benchmarking:
-- After all runs finish, write `evals/<SKILL_NAME>/workspace/iteration-2/benchmark.json`
+- After all runs finish, write `evals/<SKILL_NAME>/workspace/iteration-<N>/benchmark.json`
 - Aggregate:
   - mean pass rate
   - stddev pass rate
@@ -75,11 +124,11 @@ Use one agent per skill.
 Tell each agent:
 
 ```text
-Take a look at `evals/<SKILL_NAME>/README.md` if present, otherwise use `evals/README.md`. Then evaluate the skill using `evals/<SKILL_NAME>/evals/evals.json` and save repeated runs under `evals/<SKILL_NAME>/workspace/iteration-2/`.
+Take a look at `evals/<SKILL_NAME>/README.md` if present, otherwise use `evals/README.md`. Then evaluate the skill using `evals/<SKILL_NAME>/evals/evals.json` and save repeated runs under `evals/<SKILL_NAME>/workspace/iteration-<N>/`.
 ```
 
 Or shorter:
 
 ```text
-Evaluate `skills/<SKILL_NAME>` using `evals/<SKILL_NAME>/evals/evals.json`. Follow the repeated-run instructions in `evals/README.md`. Save everything under `evals/<SKILL_NAME>/workspace/iteration-2/`.
+Evaluate `skills/<SKILL_NAME>` using `evals/<SKILL_NAME>/evals/evals.json`. Follow the repeated-run instructions in `evals/README.md`. Save everything under `evals/<SKILL_NAME>/workspace/iteration-<N>/`.
 ```
