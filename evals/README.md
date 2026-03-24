@@ -132,3 +132,55 @@ Or shorter:
 ```text
 Evaluate `skills/<SKILL_NAME>` using `evals/<SKILL_NAME>/evals/evals.json`. Follow the repeated-run instructions in `evals/README.md`. Save everything under `evals/<SKILL_NAME>/workspace/iteration-<N>/`.
 ```
+
+## Benchmark History
+
+### Iteration 4 — Amp
+
+<sub>Opus 4.6</sub>
+
+| Skill                | Runs | With Skill | Baseline |   Delta |
+| -------------------- | ---: | ---------: | -------: | ------: |
+| `manipulating-video` |   30 |     1.0000 |   0.6611 | +0.3389 |
+| `screencast`         |   60 |     0.9695 |   0.1305 | +0.8390 |
+| `template`           |   20 |     1.0000 |   0.4250 | +0.5750 |
+| `terminal-recording` |   32 |     1.0000 |   0.5938 | +0.4062 |
+| `upload-image`       |   48 |     1.0000 |   0.4305 | +0.5695 |
+
+### Iteration 3 — Codex
+
+<sub>gpt-5.4 medium fast</sub>
+
+Many runs hit `codex exec --ephemeral` sub-session timeouts, depressing with_skill scores.
+
+| Skill                | Runs | With Skill | Baseline |   Delta |
+| -------------------- | ---: | ---------: | -------: | ------: |
+| `manipulating-video` |   30 |     0.6389 |   0.5778 | +0.0611 |
+| `screencast`         |   60 |     0.3667 |   0.0000 | +0.3667 |
+| `template`           |   20 |     0.8250 |   0.2667 | +0.5583 |
+| `terminal-recording` |   32 |     0.6667 |   0.5677 | +0.0990 |
+| `upload-image`       |   48 |     0.2639 |   0.0417 | +0.2222 |
+
+### Iteration 2 — pi
+
+<sub>claude-opus-4-6</sub>
+
+| Skill                | Runs | With Skill | Baseline |   Delta |
+| -------------------- | ---: | ---------: | -------: | ------: |
+| `manipulating-video` |   30 |     1.0000 |   0.6450 | +0.3550 |
+| `screencast`         |   60 |     0.9700 |   0.1300 | +0.8400 |
+| `template`           |   20 |     1.0000 |   0.3830 | +0.6170 |
+| `terminal-recording` |   32 |     1.0000 |   0.4060 | +0.5940 |
+| `upload-image`       |   48 |     1.0000 |   0.5000 | +0.5000 |
+
+### Iteration 1 — Codex (calibration pass, not a benchmark)
+
+Codex authored the eval specs, improved the skills, then ran single-run evals and graded its own work — all in one session with full context. Treat as a bootstrap/calibration pass, not a real benchmark.
+
+| Skill                | With Skill | Baseline |   Delta |
+| -------------------- | ---------: | -------: | ------: |
+| `manipulating-video` |     1.0000 |   0.3611 | +0.6389 |
+| `screencast`         |     1.0000 |   0.5000 | +0.5000 |
+| `template`           |     1.0000 |   0.0000 | +1.0000 |
+| `terminal-recording` |     1.0000 |   0.4167 | +0.5833 |
+| `upload-image`       |     1.0000 |   0.2222 | +0.7778 |

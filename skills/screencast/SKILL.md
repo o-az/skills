@@ -71,9 +71,9 @@ Expected output: `Relay is running. Viewer URL: http://localhost:3456` followed 
 
 If it prints an error, read `/tmp/screencast-relay.log` for diagnostics.
 
-### Step 3 — Verify the relay is receiving frames
+### Step 3 — Verify the relay visually
 
-Run a health check before telling the user the screencast is live:
+Run a health check:
 
 ```bash
 curl -s http://localhost:3456/health
@@ -89,13 +89,26 @@ agent-browser eval "location.reload()"
 
 Then check health once more.
 
+**Then take a screenshot of the target page** to confirm it rendered correctly:
+
+```bash
+agent-browser screenshot /tmp/screencast-verify.png
+```
+
+Review the screenshot to confirm the page looks right.
+
+> **IMPORTANT:** Do NOT open `http://localhost:3456` in agent-browser to verify.
+> That navigates the screencasted browser **away** from the target page, which
+> breaks the screencast (frames freeze) and disables file watching for `file://`
+> URLs. Always verify by screenshotting the target page or by curling `/health`.
+
 ### Step 4 — Share the viewer URL
 
-Tell the user:
+**You MUST share the viewer URL with the user before doing anything else.** Do not skip this step.
 
 > Screencast is live at **http://localhost:3456**
 
-That's it for local sharing.
+This is the whole point of the skill — the user needs the URL to watch.
 
 ### Step 5 — Public sharing (only when asked)
 
@@ -124,6 +137,10 @@ If the user requests a different public method, only then use one from the shari
 
 ```bash
 pkill -f "server.py"
+```
+
+```bash
+agent-browser close
 ```
 
 ## Configuration
