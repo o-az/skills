@@ -15,13 +15,13 @@
     "postinstall": "simple-git-hooks"
   },
   "devDependencies": {
-    "@j178/prek": "^0.3.6",
-    "oxfmt": "^0.41.0",
-    "oxlint": "^1.56.0",
+    "@j178/prek": "^0.3.8",
+    "oxfmt": "^0.42.0",
+    "oxlint": "^1.57.0",
     "simple-git-hooks": "^2.13.1"
   },
   "simple-git-hooks": {
-    "pre-commit": "bun prek run --all-files --config='.github/.pre-commit.yml' && bun check"
+    "pre-commit": "bun prek run --all-files --config='.github/.pre-commit.yml' && bun check && bun validate-skills"
   },
   "trustedDependencies": [
     "@j178/prek"

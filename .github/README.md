@@ -4,10 +4,10 @@ Hand-crafted Skills I built for my workflows. Each one solves a real problem I k
 
 | Skill                                            | What it does                                                                                                                                                                            |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [manipulating-video](/skills/manipulating-video) | Manipulate video files with [`ffmpeg`](https://github.com/ffmpeg/ffmpeg) — speed up/slow down, resize, compress, convert formats, extract audio, convert to GIF, trim, merge, and more. |
 | [screencast](/skills/screencast)                 | Live-stream browser screencasts over WebSocket so others can watch in real time.                                                                                                        |
-| [terminal-recording](/skills/terminal-recording) | Record, upload, and GIF-convert terminal sessions with [`asciinema`](https://github.com/asciinema/asciinema) and [`agg`](https://github.com/asciinema/agg).                             |
+| [manipulating-video](/skills/manipulating-video) | Manipulate video files with [`ffmpeg`](https://github.com/ffmpeg/ffmpeg) — speed up/slow down, resize, compress, convert formats, extract audio, convert to GIF, trim, merge, and more. |
 | [upload-image](/skills/upload-image)             | Uploads images to [imgbb](https://ibb.co) — local files, URLs, SVGs, base64, whatever. No more manual hosting.                                                                          |
+| [terminal-recording](/skills/terminal-recording) | Record, upload, and GIF-convert terminal sessions with [`asciinema`](https://github.com/asciinema/asciinema) and [`agg`](https://github.com/asciinema/agg).                             |
 
 > [!NOTE]
 > Skills are reusable capabilities for AI agents. They provide procedural knowledge that helps agents accomplish specific tasks more effectively. Skills can include code generation patterns, domain expertise, tool integrations, and more.
@@ -52,7 +52,7 @@ Latest results (Iteration 4 — Amp, Opus 4.6):
 | [`terminal-recording`](/skills/terminal-recording) |   32 |     1.0000 |   0.5938 | +0.4062 |
 | [`upload-image`](/skills/upload-image)             |   48 |     1.0000 |   0.4305 | +0.5695 |
 
-Full history and benchmark files are in [`evals/`](/evals).
+Full history and benchmark files are in [`evals`](/evals) directory.
 
 <details>
 
