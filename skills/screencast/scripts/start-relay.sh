@@ -83,7 +83,7 @@ sleep 0.5
 
 # Export config so the detached child inherits them
 export PYTHONUNBUFFERED=1
-for var in PORT BIND_HOST CDP_URL QUALITY MAX_WIDTH MAX_HEIGHT EVERY_NTH WATCH; do
+for var in PORT BIND_HOST CDP_URL QUALITY MAX_WIDTH MAX_HEIGHT EVERY_NTH WATCH IDLE_TIMEOUT; do
   [ -n "${!var:-}" ] && export "$var"
 done
 

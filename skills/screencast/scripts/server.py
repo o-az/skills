@@ -22,19 +22,20 @@ Env:
   MAX_WIDTH      - Max frame width (default: 960)
   MAX_HEIGHT     - Max frame height (default: 540)
   EVERY_NTH      - Only send every Nth frame (default: 1)
+  IDLE_TIMEOUT   - Auto-shutdown after N seconds of inactivity (default: 1800, 0 = disabled)
 
 Requirements:
   uv run installs the inline dependencies declared above
 """
 
+import os
+import sys
+import json
+import signal
+import base64
 import asyncio
 import argparse
-import base64
-import json
-import os
-import signal
 import subprocess
-import sys
 from http import HTTPStatus
 from urllib.parse import urlparse
 from urllib.request import urlopen
@@ -48,6 +49,7 @@ QUALITY = int(os.environ.get("QUALITY", "40"))
 MAX_WIDTH = int(os.environ.get("MAX_WIDTH", "960"))
 MAX_HEIGHT = int(os.environ.get("MAX_HEIGHT", "540"))
 EVERY_NTH = int(os.environ.get("EVERY_NTH", "1"))
+IDLE_TIMEOUT = int(os.environ.get("IDLE_TIMEOUT", "1800"))  # seconds, 0 = disabled
 
 # --- CDP discovery ---
 
@@ -312,6 +314,12 @@ def parse_args() -> argparse.Namespace:
         default=EVERY_NTH,
         help="Forward every Nth frame. Default: %(default)s",
     )
+    parser.add_argument(
+        "--idle-timeout",
+        type=int,
+        default=IDLE_TIMEOUT,
+        help="Auto-shutdown after N seconds of inactivity. 0 = disabled. Default: %(default)s",
+    )
     args = parser.parse_args()
     if args.quality < 1 or args.quality > 100:
         parser.error("--quality must be between 1 and 100")
@@ -331,13 +339,14 @@ VIEWER_HTML_BYTES = VIEWER_HTML.encode()
 async def main():
     args = parse_args()
 
-    global BIND_HOST, PORT, QUALITY, MAX_WIDTH, MAX_HEIGHT, EVERY_NTH
+    global BIND_HOST, PORT, QUALITY, MAX_WIDTH, MAX_HEIGHT, EVERY_NTH, IDLE_TIMEOUT
     BIND_HOST = args.bind_host
     PORT = args.port
     QUALITY = args.quality
     MAX_WIDTH = args.max_width
     MAX_HEIGHT = args.max_height
     EVERY_NTH = args.every_nth
+    IDLE_TIMEOUT = args.idle_timeout
     if args.cdp_url:
         os.environ["CDP_URL"] = args.cdp_url
     elif args.legacy_cdp_url:
@@ -356,13 +365,15 @@ async def main():
     frame_number = 0
     latest_frame: bytes | None = None
     latest_meta = {"width": 0, "height": 0}
+    last_activity = asyncio.get_running_loop().time()
 
     async def broadcast_viewer_count():
         msg = json.dumps({"type": "viewers", "count": len(viewers)})
         websockets.broadcast(viewers, msg)
 
     def on_screencast_frame(params):
-        nonlocal frame_number, latest_frame, latest_meta
+        nonlocal frame_number, latest_frame, latest_meta, last_activity
+        last_activity = asyncio.get_running_loop().time()
         data = params["data"]
         metadata = params["metadata"]
         session_id = params["sessionId"]
@@ -422,6 +433,8 @@ async def main():
             )
 
     async def handler(ws):
+        nonlocal last_activity
+        last_activity = asyncio.get_running_loop().time()
         viewers.add(ws)
         try:
             await ws.send(json.dumps({"type": "meta", **latest_meta}))
@@ -495,8 +508,22 @@ async def main():
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, shutdown_event.set)
 
+        async def idle_watchdog():
+            while IDLE_TIMEOUT > 0:
+                await asyncio.sleep(60)
+                idle = loop.time() - last_activity
+                if idle >= IDLE_TIMEOUT:
+                    print(f"[relay] Idle for {int(idle)}s, shutting down", flush=True)
+                    shutdown_event.set()
+                    return
+
+        idle_task = asyncio.create_task(idle_watchdog()) if IDLE_TIMEOUT > 0 else None
+
         await shutdown_event.wait()
         print("\n[relay] Shutting down...", flush=True)
+
+        if idle_task:
+            idle_task.cancel()
 
     if watch_task:
         watch_task.cancel()

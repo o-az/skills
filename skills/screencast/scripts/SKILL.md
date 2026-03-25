@@ -35,21 +35,17 @@ No video encoding. No ffmpeg. Chrome sends JPEG frames via CDP, the relay forwar
 
 Follow these steps **in order**. Each step is a **separate** Bash tool call.
 
-### Choose the Step 2 command first
+### Step 0 — Clean slate
 
-If the user asked for watched local files, use `WATCH` in Step 2:
-
-```bash
-WATCH=./demo bash scripts/start-relay.sh
-```
-
-Otherwise use:
+Always run these first to kill any leftover state from a previous session:
 
 ```bash
-bash scripts/start-relay.sh
+pkill -f "server.py" 2>/dev/null || true
 ```
 
-For `file://` pages, WATCH is optional because the relay auto-detects the directory.
+```bash
+agent-browser close 2>/dev/null || true
+```
 
 ### Step 1 — Open the target page
 
@@ -61,17 +57,25 @@ Replace `<URL>` with the page the user wants to screencast.
 
 ### Step 2 — Start the relay
 
-Run the start script from the skill root. It backgrounds the server, verifies prerequisites, waits for health, triggers an initial page reload, and returns. **Do not add `&` or modify this command.**
+Run the start script **from the skill root directory** (use `cwd`). Do not run it via absolute path. Do not add `&` or modify this command.
 
 ```bash
 bash scripts/start-relay.sh
 ```
 
+If the user asked to watch a specific directory for live-reload, prefix with `WATCH`:
+
+```bash
+WATCH=./demo bash scripts/start-relay.sh
+```
+
+For `file://` pages, `WATCH` is optional — the relay auto-detects the directory.
+
 Expected output: `Relay is running. Viewer URL: http://localhost:3456` followed by a JSON health response.
 
 If it prints an error, read `/tmp/screencast-relay.log` for diagnostics.
 
-### Step 3 — Verify the relay visually
+### Step 3 — Verify
 
 Run a health check:
 
@@ -79,23 +83,19 @@ Run a health check:
 curl -s http://localhost:3456/health
 ```
 
-Expected result: JSON with `"status":"ok"` and `frames` greater than `0`.
+Expected: JSON with `"status":"ok"` and `frames` > `0`.
 
-If `frames` is still `0`, run:
+If `frames` is `0`, reload and re-check:
 
 ```bash
 agent-browser eval "location.reload()"
 ```
 
-Then check health once more.
-
-**Then take a screenshot of the target page** to confirm it rendered correctly:
+Then take a screenshot of the **target page** to confirm it rendered:
 
 ```bash
 agent-browser screenshot /tmp/screencast-verify.png
 ```
-
-Review the screenshot to confirm the page looks right.
 
 > **IMPORTANT:** Do NOT open `http://localhost:3456` in agent-browser to verify.
 > That navigates the screencasted browser **away** from the target page, which
@@ -107,31 +107,60 @@ Review the screenshot to confirm the page looks right.
 **You MUST share the viewer URL with the user before doing anything else.** Do not skip this step.
 
 > Screencast is live at **http://localhost:3456**
-
-This is the whole point of the skill — the user needs the URL to watch.
+>
+> Let me know if you want a tunneled URL you can share with others!
 
 ### Step 5 — Public sharing (only when asked)
 
-The local relay must already be running first (Steps 1-4). If the user asked for a link to view the screencast:
+The local relay must already be running first (Steps 1-4).
 
-_cruical_: make sure to not foreground these commands as they can block your workflow indefinitely. Use `--bg` for tailscale funnel/serve. Use `npx wrangler@latest tunnel quick-start <url> &` which backgrounds by default.
+**Step 5a** — Check what package runners and tunnel tools exist. Run each as a separate call:
 
-- share the localhost URL: `http://localhost:3456` and tell them about `tailscale serve/funnel` and `npx wrangler@latest tunnel quick-start http://localhost:3456` for public sharing options.
-- if they explicitly ask you to expose the screencast publicly, check if `npm`/`bun`/`pnpm` are available:
-  - if yes, use `npx wrangler@latest tunnel quick-start http://localhost:3456` and share the returned public URL.
-  - if no, check if `tailscale` is available:
-    - if yes, start with `tailscale serve http://localhost:3456` (Tailnet-only sharing) and share the returned URL.
-      - if they want a public HTTPS URL, switch to `tailscale funnel --bg --yes http://localhost:3456` and share that URL instead.
-    - if no, share the localhost URL and tell them to use their own tunneling solution (e.g., `ssh -R`, `localtunnel`, `ngrok`, etc.) to expose it.
+```bash
+which bun 2>/dev/null
+```
 
-Use the `https://...ts.net` URL from status output as the public viewer URL.
+```bash
+which npx 2>/dev/null
+```
 
-In the final response include both URLs:
+```bash
+which pnpm 2>/dev/null
+```
 
-1. Local viewer URL: `http://localhost:3456`
-2. Public URL returned by Funnel
+```bash
+which tailscale 2>/dev/null
+```
 
-If the user requests a different public method, only then use one from the sharing section.
+**Step 5b** — Use the **first available** option from this list. Do NOT skip ahead.
+
+1. **If `bun`, `npx`, or `pnpm` is available → Wrangler quick tunnel** (preferred — ephemeral, no identity exposure):
+
+   > The Bash tool cannot run `&` and wrangler tunnels block forever.
+   > **Tell the user the exact command to run themselves.** Do NOT run it in Bash.
+
+   Give them the command for whichever runner was found (`bun` > `npx` > `pnpm dlx`):
+
+   ```
+   bun wrangler tunnel quick-start http://localhost:3456 &
+   # or: npx wrangler@latest tunnel quick-start http://localhost:3456 &
+   # or: pnpm dlx wrangler tunnel quick-start http://localhost:3456 &
+   ```
+
+2. **Only if none of bun/npx/pnpm exist → Tailscale Serve** (tailnet-only, safe to run in Bash):
+
+   ```bash
+   tailscale serve --bg 3456
+   ```
+
+3. **Only if user explicitly wants a public URL and wrangler is unavailable → Tailscale Funnel** (public HTTPS, exposes tailnet identity, safe to run in Bash):
+
+   ```bash
+   tailscale funnel --bg --yes 3456
+   tailscale funnel status
+   ```
+
+Include both the local and public/tunneled URLs in your response.
 
 ## Stop
 
@@ -157,6 +186,7 @@ All via environment variables (set before the `bash start-relay.sh` command):
 | `MAX_HEIGHT`           | 540       | Max frame height (lower = faster FPS)                                                         |
 | `EVERY_NTH`            | 1         | Send every Nth frame (1 = all)                                                                |
 | `WATCH`                | —         | Directory to watch for file changes (auto-reloads browser). Auto-detected for `file://` URLs. |
+| `IDLE_TIMEOUT`         | 1800      | Auto-shutdown after N seconds of inactivity (frames/viewers). `0` = disabled.                 |
 | `FORCE_INITIAL_RELOAD` | 1         | Set to `0` to skip the automatic first-frame reload in `start-relay.sh`.                      |
 
 ## File Watching
@@ -175,28 +205,12 @@ curl -s http://localhost:3456/health
 
 The screencast should remain healthy and continue serving frames.
 
-## Sharing Publicly (only when asked)
+## Sharing Publicly (reference)
 
-**CF Quick Tunnel** — Public HTTPS URL:
+See Step 5 for the full decision tree. Quick reference in priority order:
 
-```bash
-npx wrangler@latest tunnel quick-start http://localhost:3456 &
-```
-
-**Tailscale Funnel** — Public HTTPS URL:
-
-```bash
-tailscale funnel --bg --yes 3456
-tailscale funnel status
-```
-
-**Tailscale Serve** — Tailnet only:
-
-```bash
-tailscale serve 3456 --bg
-```
-
-**Other options:**
-
-- `ssh -R 80:localhost:3456 serveo.net`
-- `npx wrangler@latest tunnel quick-start http://localhost:3456`
+| Method                | Privacy                  | Agent can run? | Command                                                   |
+| --------------------- | ------------------------ | -------------- | --------------------------------------------------------- |
+| Wrangler quick tunnel | Ephemeral, no identity   | ❌ Tell user   | `bun wrangler tunnel quick-start http://localhost:3456 &` |
+| Tailscale Serve       | Tailnet-only             | ✅             | `tailscale serve --bg 3456`                               |
+| Tailscale Funnel      | Public, exposes identity | ✅             | `tailscale funnel --bg --yes 3456`                        |
