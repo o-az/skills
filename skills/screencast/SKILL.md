@@ -17,13 +17,13 @@ No video encoding. No ffmpeg. Chrome sends JPEG frames via CDP, the relay forwar
 
 ## Prerequisites
 
-- **agent-browser** CLI (used to open pages and interact with Chrome)
-- **uv** to run the bundled Python relay script with its inline dependencies
+- [**agent-browser**](https://github.com/vercel-labs/agent-browser) CLI (used to open pages and interact with Chrome)
+- [**uv**](https://github.com/astral-sh/uv) to run the bundled Python relay script with its inline dependencies
 
 ## Available scripts
 
-- `scripts/start-relay.sh` - Starts the relay in the background, waits for health, and prints the viewer URL plus JSON health output.
-- `scripts/server.py` - Relay implementation. Run `uv run scripts/server.py --help` to inspect its interface when needed.
+- [`scripts/start-relay.sh`](/skills/screencast/scripts/start-relay.sh) - Starts the relay in the background, waits for health, and prints the viewer URL plus JSON health output.
+- [`scripts/server.py`](/skills/screencast/scripts/server.py) - Relay implementation. Run `uv run scripts/server.py --help` to inspect its interface when needed.
 
 ## Rules
 
