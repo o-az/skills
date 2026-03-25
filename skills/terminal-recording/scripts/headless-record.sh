@@ -47,6 +47,8 @@ EOF
   exit 1
 fi
 
+# "$*" joins all remaining args into a single string, which is what --command expects.
+# Callers should quote compound commands: -- sh -lc 'cmd1; cmd2'
 asciinema rec --overwrite --headless --command "$*" "$CAST_PATH" >/tmp/terminal-recording-headless.log 2>&1
 
 jq -n --arg cast_path "$CAST_PATH" '{cast_path:$cast_path}'

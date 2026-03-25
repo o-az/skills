@@ -17,7 +17,6 @@ Record terminal sessions with [asciinema](https://asciinema.org), upload them, a
 - `asciinema` CLI installed (**v3+** for `--headless` in `scripts/headless-record.sh`)
 - `agg` CLI installed (for GIF conversion)
 - `curl` and `jq` installed for the bundled helper scripts
-- `kitty` optional for launching the recorder in a separate terminal window
 - `IBB_API_KEY` required when hosting GIFs with `scripts/finalize-recording.sh --upload-gif`
 
 ## When to Use
@@ -61,7 +60,7 @@ When the user asks to record a session, follow this flow:
 
 When the user says **"start"**:
 
-1. Start the recording in a kitty window (if available) or directly:
+1. Start the recording:
 
    ```bash
    asciinema rec /tmp/<topic>/<topic>.cast
@@ -99,12 +98,12 @@ When the user says **"done"**:
 4. Present results:
 
    ```
-   ✅ Recording complete: <topic>
+   Recording complete: <topic>
 
      Asciinema URL:  https://asciinema.org/a/xxxxx
      Cast file:      /tmp/<topic>/<topic>.cast
      GIF file:       /tmp/<topic>/<topic>.gif
-     GIF URL:        https://i.ibb.co/xxxx/topic.gif   ← only if uploaded
+     GIF URL:        https://i.ibb.co/xxxx/topic.gif   (only if uploaded)
    ```
 
 ### Manual Usage (Non-Interactive)

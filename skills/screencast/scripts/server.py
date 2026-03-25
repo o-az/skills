@@ -36,8 +36,10 @@ import base64
 import asyncio
 import argparse
 import subprocess
+from collections.abc import Callable
+from dataclasses import dataclass
 from http import HTTPStatus
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
 
 import websockets
@@ -112,7 +114,7 @@ class CdpClient:
         self._url = url
         self._next_id = 1
         self._ws = None
-        self._handlers: dict[str, callable] = {}
+        self._handlers: dict[str, Callable] = {}
         self._pending: dict[int, asyncio.Future] = {}
         self._listen_task = None
 
@@ -333,20 +335,33 @@ def parse_args() -> argparse.Namespace:
 
 VIEWER_HTML_BYTES = VIEWER_HTML.encode()
 
+
+@dataclass(frozen=True)
+class Config:
+    bind_host: str
+    port: int
+    quality: int
+    max_width: int
+    max_height: int
+    every_nth: int
+    idle_timeout: int
+
+
 # --- Main ---
 
 
 async def main():
     args = parse_args()
 
-    global BIND_HOST, PORT, QUALITY, MAX_WIDTH, MAX_HEIGHT, EVERY_NTH, IDLE_TIMEOUT
-    BIND_HOST = args.bind_host
-    PORT = args.port
-    QUALITY = args.quality
-    MAX_WIDTH = args.max_width
-    MAX_HEIGHT = args.max_height
-    EVERY_NTH = args.every_nth
-    IDLE_TIMEOUT = args.idle_timeout
+    cfg = Config(
+        bind_host=args.bind_host,
+        port=args.port,
+        quality=args.quality,
+        max_width=args.max_width,
+        max_height=args.max_height,
+        every_nth=args.every_nth,
+        idle_timeout=args.idle_timeout,
+    )
     if args.cdp_url:
         os.environ["CDP_URL"] = args.cdp_url
     elif args.legacy_cdp_url:
@@ -383,7 +398,7 @@ async def main():
         )
 
         frame_number += 1
-        if EVERY_NTH > 1 and frame_number % EVERY_NTH != 0:
+        if cfg.every_nth > 1 and frame_number % cfg.every_nth != 0:
             return
 
         binary = base64.b64decode(data)
@@ -399,12 +414,12 @@ async def main():
 
     await cdp.send("Page.startScreencast", {
         "format": "jpeg",
-        "quality": QUALITY,
-        "maxWidth": MAX_WIDTH,
-        "maxHeight": MAX_HEIGHT,
+        "quality": cfg.quality,
+        "maxWidth": cfg.max_width,
+        "maxHeight": cfg.max_height,
         "everyNthFrame": 1,
     })
-    print(f"[relay] Screencast started (quality={QUALITY}, {MAX_WIDTH}x{MAX_HEIGHT})", flush=True)
+    print(f"[relay] Screencast started (quality={cfg.quality}, {cfg.max_width}x{cfg.max_height})", flush=True)
 
     # --- WebSocket + HTTP server ---
 
@@ -414,7 +429,7 @@ async def main():
                 "status": "ok",
                 "viewers": len(viewers),
                 "frames": frame_number,
-                "bind_host": BIND_HOST,
+                "bind_host": cfg.bind_host,
                 "meta": latest_meta,
             }).encode()
             return Response(
@@ -481,7 +496,6 @@ async def main():
             result = await cdp.send("Runtime.evaluate", {"expression": "location.href"})
             page_url = result.get("result", {}).get("value", "")
             if page_url.startswith("file://"):
-                from urllib.parse import unquote
                 file_path = unquote(page_url[7:])
                 watch_dir = os.path.dirname(file_path)
         except Exception:
@@ -493,15 +507,15 @@ async def main():
         print(f"[relay] Watching {watch_dir} for changes", flush=True)
 
     async with websockets.serve(
-        handler, BIND_HOST, PORT, process_request=process_request
+        handler, cfg.bind_host, cfg.port, process_request=process_request
     ):
-        if BIND_HOST in {"127.0.0.1", "localhost"}:
+        if cfg.bind_host in {"127.0.0.1", "localhost"}:
             viewer_host = "localhost"
         else:
-            viewer_host = BIND_HOST
-        print(f"[relay] Viewer page: http://localhost:{PORT}", flush=True)
-        print(f"[relay] Health check: http://localhost:{PORT}/health", flush=True)
-        print(f"[relay] Bound to {BIND_HOST}:{PORT} (viewer host hint: {viewer_host})", flush=True)
+            viewer_host = cfg.bind_host
+        print(f"[relay] Viewer page: http://localhost:{cfg.port}", flush=True)
+        print(f"[relay] Health check: http://localhost:{cfg.port}/health", flush=True)
+        print(f"[relay] Bound to {cfg.bind_host}:{cfg.port} (viewer host hint: {viewer_host})", flush=True)
 
         shutdown_event = asyncio.Event()
         loop = asyncio.get_running_loop()
@@ -509,15 +523,15 @@ async def main():
             loop.add_signal_handler(sig, shutdown_event.set)
 
         async def idle_watchdog():
-            while IDLE_TIMEOUT > 0:
+            while cfg.idle_timeout > 0:
                 await asyncio.sleep(60)
                 idle = loop.time() - last_activity
-                if idle >= IDLE_TIMEOUT:
+                if idle >= cfg.idle_timeout:
                     print(f"[relay] Idle for {int(idle)}s, shutting down", flush=True)
                     shutdown_event.set()
                     return
 
-        idle_task = asyncio.create_task(idle_watchdog()) if IDLE_TIMEOUT > 0 else None
+        idle_task = asyncio.create_task(idle_watchdog()) if cfg.idle_timeout > 0 else None
 
         await shutdown_event.wait()
         print("\n[relay] Shutting down...", flush=True)
