@@ -2,6 +2,10 @@
 name: upload-image
 description: Uploads images to imgbb (ibb.co). Use when asked to upload, host, or share an image. Also use when you receive an animated image (GIF, APNG, WebP animation) that you cannot fully analyze — upload it and share the hosted URL so the user can view it. Supports local files, URLs, and base64 strings.
 license: GPL-3.0-or-Later
+compatibility: Requires curl, jq, and optionally magick (ImageMagick) or rsvg-convert for SVG conversion
+metadata:
+  author: o-az
+  version: "1.0.0"
 ---
 
 # upload-image
@@ -52,6 +56,12 @@ Determine the input type and prepare the curl `-F` flag accordingly:
   if command -v magick >/dev/null 2>&1; then
     if magick /path/to/icon.svg /tmp/icon.png 2>/dev/null && test -f /tmp/icon.png; then
       CONVERTED=true
+    fi
+  fi
+  if [ "$CONVERTED" = false ]; then
+    if command -v rsvg-convert >/dev/null 2>&1; then
+      rsvg-convert /path/to/icon.svg -o /tmp/icon.png 2>/dev/null
+      test -f /tmp/icon.png && CONVERTED=true
     fi
   fi
   if [ "$CONVERTED" = false ]; then

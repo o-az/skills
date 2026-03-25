@@ -2,6 +2,7 @@
 name: manipulating-video
 description: "Manipulates video files with ffmpeg — speed up/slow down, resize, compress, convert formats, extract audio, convert to GIF, trim, merge, and more. Use when asked to edit, convert, compress, speed up, slow down, resize, trim, merge, or transform a video file."
 license: "GPL-3.0-or-Later"
+compatibility: Requires ffmpeg (with libx264, libx265, libvpx, or equivalent codecs) and ffprobe
 metadata:
   author: o-az
   version: "1.0.0"
@@ -99,14 +100,30 @@ ffmpeg -y -i "<INPUT>" -filter:v "setpts=PTS/<N>" -an "<OUTPUT>" 2>&1
 
 Use CRF (Constant Rate Factor) — higher = smaller file, lower quality. Good defaults: 23 (balanced), 28 (smaller), 18 (higher quality).
 
+**With audio:**
+
 ```bash
 ffmpeg -y -i "<INPUT>" -c:v libx264 -crf 28 -preset medium -c:a aac -b:a 128k "<OUTPUT>" 2>&1
 ```
 
+**Without audio:**
+
+```bash
+ffmpeg -y -i "<INPUT>" -c:v libx264 -crf 28 -preset medium -an "<OUTPUT>" 2>&1
+```
+
 For aggressive compression, also scale down:
+
+**With audio:**
 
 ```bash
 ffmpeg -y -i "<INPUT>" -c:v libx264 -crf 30 -preset slow -vf "scale=iw/2:ih/2" -c:a aac -b:a 96k "<OUTPUT>" 2>&1
+```
+
+**Without audio:**
+
+```bash
+ffmpeg -y -i "<INPUT>" -c:v libx264 -crf 30 -preset slow -vf "scale=iw/2:ih/2" -an "<OUTPUT>" 2>&1
 ```
 
 ### Convert format
@@ -194,8 +211,16 @@ ffmpeg -y -f concat -safe 0 -i /tmp/concat_list.txt -c copy "<OUTPUT>" 2>&1
 
 ### Reverse
 
+**With audio:**
+
 ```bash
 ffmpeg -y -i "<INPUT>" -vf reverse -af areverse "<OUTPUT>" 2>&1
+```
+
+**Without audio:**
+
+```bash
+ffmpeg -y -i "<INPUT>" -vf reverse -an "<OUTPUT>" 2>&1
 ```
 
 Note: loads entire video into memory. For long videos, trim first, then reverse.
