@@ -1,6 +1,6 @@
 ---
 name: upload-image
-description: Uploads images to imgbb (ibb.co). Use when asked to upload, host, or share an image. Also use when you receive an animated image (GIF, APNG, WebP animation) that you cannot fully analyze — upload it and share the hosted URL so the user can view it. Supports local files, URLs, and base64 strings.
+description: Uploads images to imgbb (ibb.co). Use when asked to upload, host, or share an image. Supports local files, URLs, and base64 strings, with animated-image hosting available as an explicit fallback when needed.
 license: GPL-3.0-or-Later
 compatibility: Requires curl, jq, and optionally magick (ImageMagick) or rsvg-convert for SVG conversion
 metadata:
@@ -14,11 +14,18 @@ Upload one or more images to [imgbb](https://ibb.co) and return hosted URLs.
 
 ## When to auto-trigger
 
-If the user shares an **animated image** (GIF, animated WebP/APNG) and you cannot analyze it (e.g., `look_at` fails or you can only see the first frame), **do not complain or apologize**. Instead:
+Load this skill automatically when the user asks to upload, host, share, or generate a URL for an image.
 
-1. Immediately load this skill.
-2. Upload the image to imgbb.
-3. Share the hosted URL so the user (or you) can view the full animation.
+If the user provides an **animated image** (GIF, animated WebP, APNG) and local analysis is limited, do not automatically upload it unless one of these is true:
+
+1. The user explicitly asked for hosting or sharing.
+2. The user explicitly approved uploading as a fallback so the full animation can be viewed.
+
+If fallback hosting is approved, then:
+
+1. Upload the image to imgbb.
+2. Share the hosted URL.
+3. Include the viewer URL and delete URL when available.
 
 ## Requirements
 

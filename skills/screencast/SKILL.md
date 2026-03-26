@@ -2,7 +2,7 @@
 name: screencast
 description: "Live-streams the browser screencast over WebSocket so others can watch the agent debug web pages in real time. Use when asked to screencast, live share, broadcast, stream screen, or let others watch."
 license: "GPL-3.0-or-Later"
-compatibility: Requires agent-browser CLI, Chrome/Chromium, Python 3, and websockets Python package
+compatibility: Requires agent-browser CLI, Chrome/Chromium, and uv. Python relay dependencies are installed automatically by uv from inline script metadata.
 metadata:
   author: o-az
   version: "1.0.0"
@@ -21,8 +21,11 @@ No video encoding. No ffmpeg. Chrome sends JPEG frames via CDP, the relay forwar
 
 ## Prerequisites
 
-- [**agent-browser**](https://github.com/vercel-labs/agent-browser) CLI (used to open pages and interact with Chrome)
-- [**uv**](https://github.com/astral-sh/uv) to run the bundled Python relay script with its inline dependencies
+- [**agent-browser**](https://github.com/vercel-labs/agent-browser) CLI
+- Chrome/Chromium available to agent-browser
+- [**uv**](https://github.com/astral-sh/uv) to run the bundled Python relay with its inline dependencies
+
+You do not need to install the Python `websockets` package separately when running via `uv run`.
 
 ## Available scripts
 
