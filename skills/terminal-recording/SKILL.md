@@ -39,13 +39,62 @@ Record terminal sessions with [asciinema](https://asciinema.org), upload them, a
 
 ## Instructions
 
-### Interactive Recording Flow
+Choose the recording flow based on whether the environment supports a true interactive terminal.
 
-When the user asks to record a session, follow this flow:
+### Preferred Flow — Non-Interactive / Agent-Driven
+
+Use this flow by default when working through an agent shell, CI, automation, or any environment where you cannot reliably enter and exit an interactive recording shell.
+
+#### Record a command headlessly
+
+```bash
+bash scripts/headless-record.sh /tmp/<topic>/<topic>.cast -- sh -lc 'echo hello; sleep 1; echo done'
+```
+
+This prints JSON with:
+
+- `cast_path`
+
+#### Finalize the recording
+
+```bash
+bash scripts/finalize-recording.sh /tmp/<topic>/<topic>.cast
+```
+
+This prints JSON with:
+
+- `cast_path`
+- `gif_path`
+- `asciinema_url`
+
+If the user wants the GIF hosted:
+
+```bash
+bash scripts/finalize-recording.sh /tmp/<topic>/<topic>.cast --upload-gif
+```
+
+This also returns:
+
+- `gif_url`
+
+Present the result as:
+
+```text
+Recording complete: <topic>
+
+  Asciinema URL:  https://asciinema.org/a/xxxxx
+  Cast file:      /tmp/<topic>/<topic>.cast
+  GIF file:       /tmp/<topic>/<topic>.gif
+  GIF URL:        https://i.ibb.co/xxxx/topic.gif   (only if uploaded)
+```
+
+### Interactive Flow — Only When a Real PTY Is Available
+
+Use this flow only when the environment supports a true interactive terminal session and you can start and stop `asciinema rec` directly.
 
 #### Phase 1 — Setup
 
-1. Ask the user for a **topic** name (or infer one from context). This becomes the directory and file name.
+1. Ask the user for a **topic** name, or infer one from context.
 2. Create the output directory:
 
    ```bash
@@ -58,98 +107,64 @@ When the user asks to record a session, follow this flow:
 
 #### Phase 2 — Recording
 
-When the user says **"start"**:
+When the user says **"start"**, run:
 
-1. Start the recording:
+```bash
+asciinema rec /tmp/<topic>/<topic>.cast
+```
 
-   ```bash
-   asciinema rec /tmp/<topic>/<topic>.cast
-   ```
-
-   **Important:** This launches an interactive sub-shell. The user works inside it freely.
-
-2. Tell the user:
-
-   > Recording started. Do your thing — say **"done"** when finished.
+This launches an interactive sub-shell for the recorded session.
 
 #### Phase 3 — Wrap-up
 
-When the user says **"done"**:
+When the user is finished, exit the recording shell and run:
 
-1. Send `exit` to the recording shell to stop it.
-2. Finalize the recording:
+```bash
+bash scripts/finalize-recording.sh /tmp/<topic>/<topic>.cast
+```
 
-   ```bash
-   bash scripts/finalize-recording.sh /tmp/<topic>/<topic>.cast
-   ```
+If the user also wants the GIF hosted, run:
 
-   This prints JSON with `cast_path`, `gif_path`, and `asciinema_url`.
+```bash
+bash scripts/finalize-recording.sh /tmp/<topic>/<topic>.cast --upload-gif
+```
 
-3. If the user also wants the GIF hosted, run:
+### Manual Commands
 
-   ```bash
-   bash scripts/finalize-recording.sh /tmp/<topic>/<topic>.cast --upload-gif
-   ```
+If the user asks for individual commands instead of the guided flow:
 
-   This prints the same JSON plus `gif_url`.
-
-   This is the preferred hosted-GIF path and aligns with the `upload-image` skill's hosting contract (imgbb + deletion support).
-
-4. Present results:
-
-   ```
-   Recording complete: <topic>
-
-     Asciinema URL:  https://asciinema.org/a/xxxxx
-     Cast file:      /tmp/<topic>/<topic>.cast
-     GIF file:       /tmp/<topic>/<topic>.gif
-     GIF URL:        https://i.ibb.co/xxxx/topic.gif   (only if uploaded)
-   ```
-
-### Manual Usage (Non-Interactive)
-
-If the user provides a `.cast` file directly or asks for individual steps:
-
-#### Record
+#### Interactive record
 
 ```bash
 mkdir -p /tmp/<topic>
 asciinema rec /tmp/<topic>/<name>.cast
 ```
 
-For scripted or automated capture, prefer the bundled helper:
-
-```bash
-bash scripts/headless-record.sh /tmp/<topic>/<topic>.cast -- sh -lc 'echo hello; sleep 1; echo done'
-```
-
-#### Upload
+#### Upload a cast
 
 ```bash
 asciinema upload /path/to/recording.cast
 ```
 
-The command prints the asciinema.org URL to stdout.
-
-#### Convert to GIF
+#### Convert a cast to GIF
 
 ```bash
 agg /path/to/recording.cast /path/to/output.gif
 ```
 
-To host the GIF, either load `upload-image` and upload the generated GIF, or use:
+#### Finalize in one step
+
+```bash
+bash scripts/finalize-recording.sh /path/to/recording.cast
+```
+
+#### Finalize and host the GIF
 
 ```bash
 bash scripts/finalize-recording.sh /path/to/recording.cast --upload-gif
 ```
 
-Do not switch to random hosts (imgur, catbox, etc.) unless the user explicitly requests a different provider.
-
-Or use the bundled helper to do both upload and GIF rendering in one step:
-
-```bash
-bash scripts/finalize-recording.sh /path/to/recording.cast
-```
+Do not switch to a different hosting provider unless the user explicitly requests one.
 
 #### Common `agg` options
 

@@ -28,26 +28,27 @@ Uses `ffmpeg` to perform common video manipulations. All commands use absolute p
 - User says "extract audio", "get the audio", "rip audio"
 - User says "merge videos", "concatenate", "join clips"
 - User says "remove audio", "mute", "strip sound"
-- User says "loop", "reverse", "rotate", "stabilize"
+- User says "loop", "reverse", or "rotate"
 
 ## Rules
 
-- Always run `ffprobe` first to inspect the input file (duration, codecs, resolution, audio presence).
+- Always run `ffprobe` first to inspect the input file.
 - Use absolute paths for all input and output files.
-- Append `2>&1` to all ffmpeg/ffprobe commands to capture diagnostics.
-- If a file has no audio stream, use `-an` and avoid audio filters/mappings.
-- Never overwrite the original file. Output to a new file (append suffix or use a different name).
-- Use `-y` to auto-overwrite output files without prompting.
-- Use hardware acceleration when available (`-hwaccel auto`).
+- Append `2>&1` to all `ffmpeg` and `ffprobe` commands to capture diagnostics.
+- Never overwrite the original file. Write to a new file.
+- Use `-y` to avoid interactive overwrite prompts.
+- Only use audio filters, mappings, or codecs when the file actually has an audio stream.
+- Prefer safe generic defaults over container- or codec-dependent shortcuts.
+- If you use a faster but less accurate method, tell the user.
 
 ## Agent Checklist
 
 Use this order every time:
 
 1. Probe the input with `ffprobe`.
-2. Check probe output for audio streams and note `has_audio=true/false`.
-3. Choose a new output path before running `ffmpeg`.
-4. Pick the command for the requested operation and match audio flags to `has_audio`.
+2. Determine whether the file has audio.
+3. Choose a new output path.
+4. Decide whether the user needs a fast copy-based transform or an accurate re-encoded transform.
 5. Run the command with `2>&1`.
 6. Tell the user exactly which file you wrote.
 
@@ -68,19 +69,17 @@ Prefer predictable suffixes so the user can find the result:
 
 ### Step 0 — Inspect the input
 
-Always start by probing the file:
+Always start here:
 
 ```bash
 ffprobe -v error -show_entries format=duration,size,bit_rate -show_entries stream=codec_name,codec_type,width,height,r_frame_rate,bit_rate -of json "<INPUT>" 2>&1
 ```
 
-Note whether audio streams exist — this determines whether to include audio filters/mappings.
-
-If there are no audio streams, avoid audio mappings/filters/codec flags such as `-map 0:a`, `-af`, `-c:a`, `-b:a`, or `atempo`.
+Record whether the input has an audio stream before choosing a command.
 
 ### Speed up / slow down
 
-Change playback speed by factor `N` (e.g., 1.5 = 50% faster, 0.5 = half speed).
+Change playback speed by factor `N` such as `2.0` or `0.5`.
 
 **With audio:**
 
@@ -88,7 +87,7 @@ Change playback speed by factor `N` (e.g., 1.5 = 50% faster, 0.5 = half speed).
 ffmpeg -y -i "<INPUT>" -filter_complex "[0:v]setpts=PTS/<N>[v];[0:a]atempo=<N>[a]" -map "[v]" -map "[a]" "<OUTPUT>" 2>&1
 ```
 
-Note: `atempo` only accepts values between 0.5 and 100.0. For extreme slowdowns, chain multiple atempo filters: `atempo=0.5,atempo=0.5` for 0.25x.
+If `N` falls outside what a single `atempo` supports, chain multiple `atempo` filters.
 
 **Without audio:**
 
@@ -98,7 +97,7 @@ ffmpeg -y -i "<INPUT>" -filter:v "setpts=PTS/<N>" -an "<OUTPUT>" 2>&1
 
 ### Reduce file size / compress
 
-Use CRF (Constant Rate Factor) — higher = smaller file, lower quality. Good defaults: 23 (balanced), 28 (smaller), 18 (higher quality).
+Safe generic default.
 
 **With audio:**
 
@@ -132,6 +131,8 @@ ffmpeg -y -i "<INPUT>" -c:v libx264 -crf 30 -preset slow -vf "scale=iw/2:ih/2" -
 ffmpeg -y -i "<INPUT>" "<OUTPUT.ext>" 2>&1
 ```
 
+Use explicit codecs when the user requests a specific target format or broad compatibility.
+
 ffmpeg infers codecs from the output extension. For specific codecs:
 
 | Target | Flags                          |
@@ -143,7 +144,7 @@ ffmpeg infers codecs from the output extension. For specific codecs:
 
 ### Convert to GIF
 
-Two-pass approach for good quality with small file size:
+Use the two-pass palette workflow for the default high-quality path.
 
 ```bash
 # Pass 1 — generate palette
@@ -155,37 +156,69 @@ ffmpeg -y -i "<INPUT>" -vf "fps=<FPS>,scale=<WIDTH>:-1:flags=lanczos,palettegen=
 ffmpeg -y -i "<INPUT>" -i /tmp/palette.png -lavfi "fps=<FPS>,scale=<WIDTH>:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=5" "<OUTPUT.gif>" 2>&1
 ```
 
-Good defaults: `FPS=12`, `WIDTH=480`. Increase for higher quality (and larger file).
-
-For a quick single-pass GIF (lower quality):
-
-```bash
-ffmpeg -y -i "<INPUT>" -vf "fps=10,scale=320:-1" "<OUTPUT.gif>" 2>&1
-```
+Good defaults: `FPS=12`, `WIDTH=480`.
 
 ### Trim / extract segment
+
+Use one of these two modes depending on the user's need.
+
+**Fast trim, not frame-accurate:**
 
 ```bash
 ffmpeg -y -ss <START> -to <END> -i "<INPUT>" -c copy "<OUTPUT>" 2>&1
 ```
 
-`-ss` and `-to` accept `HH:MM:SS.ms` or seconds. Place `-ss` before `-i` for fast seeking.
+**Accurate trim with audio, re-encodes output:**
+
+```bash
+ffmpeg -y -ss <START> -to <END> -i "<INPUT>" -c:v libx264 -c:a aac "<OUTPUT>" 2>&1
+```
+
+**Accurate trim without audio, re-encodes output:**
+
+```bash
+ffmpeg -y -ss <START> -to <END> -i "<INPUT>" -c:v libx264 -an "<OUTPUT>" 2>&1
+```
+
+Use the accurate version when the user cares about exact cut points.
 
 ### Resize / scale
+
+**With audio:**
 
 ```bash
 ffmpeg -y -i "<INPUT>" -vf "scale=<WIDTH>:<HEIGHT>" -c:a copy "<OUTPUT>" 2>&1
 ```
 
-Use `-1` for auto-calculated dimension: `scale=1280:-1` (width 1280, height auto). Use `-2` instead of `-1` if you get "not divisible by 2" errors.
+**Without audio:**
+
+```bash
+ffmpeg -y -i "<INPUT>" -vf "scale=<WIDTH>:<HEIGHT>" -an "<OUTPUT>" 2>&1
+```
+
+Use `-2` instead of `-1` when you need ffmpeg to keep dimensions even.
 
 ### Extract audio
 
+Choose the method based on whether container/codec compatibility matters.
+
+**Most reliable default: re-encode audio**
+
 ```bash
-ffmpeg -y -i "<INPUT>" -vn -c:a copy "<OUTPUT.m4a>" 2>&1
+ffmpeg -y -i "<INPUT>" -vn -c:a aac -b:a 192k "<OUTPUT.m4a>" 2>&1
 ```
 
-Or re-encode: `-c:a libmp3lame -q:a 2` for MP3, `-c:a libopus -b:a 128k` for Opus.
+**Only when the source codec is already compatible with the destination container: stream copy**
+
+```bash
+ffmpeg -y -i "<INPUT>" -vn -c:a copy "<OUTPUT>" 2>&1
+```
+
+If the user wants MP3 instead, use:
+
+```bash
+ffmpeg -y -i "<INPUT>" -vn -c:a libmp3lame -q:a 2 "<OUTPUT.mp3>" 2>&1
+```
 
 ### Remove audio
 
