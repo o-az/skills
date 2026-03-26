@@ -171,13 +171,13 @@ ffmpeg -y -ss <START> -to <END> -i "<INPUT>" -c copy "<OUTPUT>" 2>&1
 **Accurate trim with audio, re-encodes output:**
 
 ```bash
-ffmpeg -y -ss <START> -to <END> -i "<INPUT>" -c:v libx264 -c:a aac "<OUTPUT>" 2>&1
+ffmpeg -y -i "<INPUT>" -ss <START> -to <END> -c:v libx264 -c:a aac "<OUTPUT>" 2>&1
 ```
 
 **Accurate trim without audio, re-encodes output:**
 
 ```bash
-ffmpeg -y -ss <START> -to <END> -i "<INPUT>" -c:v libx264 -an "<OUTPUT>" 2>&1
+ffmpeg -y -i "<INPUT>" -ss <START> -to <END> -c:v libx264 -an "<OUTPUT>" 2>&1
 ```
 
 Use the accurate version when the user cares about exact cut points.
