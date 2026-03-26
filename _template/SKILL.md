@@ -1,5 +1,5 @@
 ---
-name: _template
+name: template
 description: "Template for authoring new skills. Use when creating or refactoring a skill and you need a concise SKILL.md structure with clear trigger text, prerequisites, script references, and eval coverage."
 license: "GPL-3.0-or-Later"
 metadata:
