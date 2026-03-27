@@ -1,8 +1,6 @@
 # Skills
 
-Hand-crafted [skills](https://skills.sh) for agents, built from workflows I kept running into in real use.
-
-These are reusable capabilities for AI agents: practical, tool-heavy instructions that make specific tasks more reliable instead of forcing the model to improvise every time.
+Hand-crafted [skills](https://skills.sh) for agents, built from workflows I kept manually repeating.
 
 | Skill                                            | What it does                                                                                                                                                                            |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
