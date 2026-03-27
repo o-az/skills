@@ -1,6 +1,6 @@
 # Skills
 
-Hand-crafted Skills I built for my workflows. Each one solves a real problem I kept running into.
+Hand-crafted [skills](https://skills.sh) for agents, built from workflows I kept manually repeating.
 
 | Skill                                            | What it does                                                                                                                                                                            |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -13,12 +13,18 @@ Hand-crafted Skills I built for my workflows. Each one solves a real problem I k
 > Skills are reusable capabilities for AI agents. They provide procedural knowledge that helps agents accomplish specific tasks more effectively. Skills can include code generation patterns, domain expertise, tool integrations, and more.
 > <sub>[skills.sh](https://skills.sh/docs/faq)</sub>
 
-## How do I use <skill-name>?
+## Install
 
 Install a single skill:
 
 ```bash
 npx skills@latest add o-az/skills --skill <skill-name>
+```
+
+Example:
+
+```bash
+npx skills@latest add o-az/skills --skill screencast
 ```
 
 Install all skills:
@@ -32,7 +38,7 @@ npx skills@latest add o-az/skills --all
 0. Copy skill template
 
 ```sh
-cp -R skills/template skills/<new-skill-name>
+cp -R _template skills/<new-skill-name>
 ```
 
 1. Edit `skills/<new-skill-name>/SKILL.md` with the new Skill's name and description
@@ -44,11 +50,13 @@ cp -R skills/template skills/<new-skill-name>
 
 Latest results (Iteration 4 — Amp, Opus 4.6):
 
+`With Skill` is the success rate with the skill loaded. `Baseline` is the same eval without the skill-specific guidance.
+
 | Skill                                              | Runs | With Skill | Baseline |   Delta |
 | -------------------------------------------------- | ---: | ---------: | -------: | ------: |
 | [`manipulating-video`](/skills/manipulating-video) |   30 |     1.0000 |   0.6611 | +0.3389 |
 | [`screencast`](/skills/screencast)                 |   60 |     0.9695 |   0.1305 | +0.8390 |
-| [`template`](/skills/template)                     |   20 |     1.0000 |   0.4250 | +0.5750 |
+| [`template`](/_template)                           |   20 |     1.0000 |   0.4250 | +0.5750 |
 | [`terminal-recording`](/skills/terminal-recording) |   32 |     1.0000 |   0.5938 | +0.4062 |
 | [`upload-image`](/skills/upload-image)             |   48 |     1.0000 |   0.4305 | +0.5695 |
 
