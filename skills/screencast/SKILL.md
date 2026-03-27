@@ -17,7 +17,7 @@ flowchart TD
     Viewers -- "GET /" --> Relay
 ```
 
-No video encoding. No ffmpeg. Chrome sends JPEG frames via CDP, the relay forwards raw bytes over WebSocket. Viewers display frames in an `<img>` tag. Sub-100ms latency.
+No video encoding. No `ffmpeg`. Chrome sends JPEG frames via CDP, the relay forwards raw bytes over WebSocket. Viewers display frames in an `<img>` tag. Sub-100ms latency.
 
 ## Prerequisites
 
@@ -35,7 +35,7 @@ You do not need to install the Python `websockets` package separately when runni
 ## Rules
 
 - Do NOT manually search for Chrome, launch Chrome, or look for CDP ports. The scripts and agent-browser handle all of this.
-- Do NOT try to expose the relay publicly (tailscale, localtunnel, ngrok, etc.) unless the user explicitly asks. The viewer URL is `http://localhost:3456`.
+- Do NOT try to expose the relay publicly (`tailscale`, `localtunnel`, `ngrok`, etc.) unless the user explicitly asks. The viewer URL is `http://localhost:3456`.
 - Do NOT chain commands with `&&` or `;` in any step. Run each step as its own Bash tool call.
 
 ## Steps
@@ -70,13 +70,13 @@ Run the start script **from the skill root directory** (use `cwd`). Do not run i
 bash scripts/start-relay.sh
 ```
 
-If the user asked to watch a specific directory for live-reload, prefix with `WATCH`:
+If the user asked to watch a specific directory for live-reload, prefix with `WATCH`. For example, to watch the `./demo` directory:
 
 ```bash
 WATCH=./demo bash scripts/start-relay.sh
 ```
 
-For `file://` pages, `WATCH` is optional — the relay auto-detects the directory.
+For `file://` pages, `WATCH` is optional — the relay auto-detects the page directory.
 
 Expected output: `Relay is running. Viewer URL: http://localhost:3456` followed by a JSON health response.
 
@@ -141,15 +141,15 @@ which tailscale 2>/dev/null
 
 **Step 5b** — Use the **first available** option from this list. Do NOT skip ahead.
 
-1. **If `bun`, `npx`, or `pnpm` is available → Wrangler quick tunnel** (preferred — ephemeral, no identity exposure):
+1. **If `bunx`, `npx`, or `pnpm dlx` is available → Wrangler quick tunnel** (preferred — ephemeral, no identity exposure):
 
    > The Bash tool cannot run `&` and wrangler tunnels block forever.
    > **Tell the user the exact command to run themselves.** Do NOT run it in Bash.
 
-   Give them the command for whichever runner was found (`bun` > `npx` > `pnpm dlx`):
+   Give them the command for whichever runner was found (`bunx` > `npx` > `pnpm dlx`):
 
    ```
-   bun wrangler tunnel quick-start http://localhost:3456 &
+   bun x wrangler@latest tunnel quick-start http://localhost:3456 &
    # or: npx wrangler@latest tunnel quick-start http://localhost:3456 &
    # or: pnpm dlx wrangler tunnel quick-start http://localhost:3456 &
    ```
@@ -216,8 +216,8 @@ The screencast should remain healthy and continue serving frames.
 
 See Step 5 for the full decision tree. Quick reference in priority order:
 
-| Method                | Privacy                  | Agent can run? | Command                                                   |
-| --------------------- | ------------------------ | -------------- | --------------------------------------------------------- |
-| Wrangler quick tunnel | Ephemeral, no identity   | ❌ Tell user   | `bun wrangler tunnel quick-start http://localhost:3456 &` |
-| Tailscale Serve       | Tailnet-only             | ✅             | `tailscale serve --bg 3456`                               |
-| Tailscale Funnel      | Public, exposes identity | ✅             | `tailscale funnel --bg --yes 3456`                        |
+| Method                | Privacy                  | Agent can run? | Command                                                            |
+| --------------------- | ------------------------ | -------------- | ------------------------------------------------------------------ |
+| Wrangler quick tunnel | Ephemeral, no identity   | ❌ Tell user   | `bun x wrangler@latest tunnel quick-start http://localhost:3456 &` |
+| Tailscale Serve       | Tailnet-only             | ✅             | `tailscale serve --bg 3456`                                        |
+| Tailscale Funnel      | Public, exposes identity | ✅             | `tailscale funnel --bg --yes 3456`                                 |
