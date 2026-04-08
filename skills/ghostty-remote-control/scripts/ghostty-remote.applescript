@@ -38,7 +38,8 @@ end run
 on captureCommand(argv, actionName)
 	set targetToken to "focused"
 	if (count of argv) > 1 then set targetToken to item 2 of argv
-	return my captureFromTarget(targetToken, actionName)
+	set termRef to my resolveTerminal(targetToken)
+	return my captureFromTerminal(termRef, actionName)
 end captureCommand
 
 on requireArgCount(argv, minimumCount, usageText)
@@ -82,7 +83,7 @@ on snapshotJSONForArgs(argv)
 
 	set termRef to my resolveTerminal(targetToken)
 	set captureAction to my captureActionForExtent(extentValue)
-	set captureText to my captureFromTarget(targetToken, captureAction)
+	set captureText to my captureFromTerminal(termRef, captureAction)
 
 	return "{" & ¬
 		"\"ok\":true," & ¬
@@ -296,6 +297,10 @@ end actionResultJSON
 
 on captureFromTarget(targetToken, actionName)
 	set termRef to my resolveTerminal(targetToken)
+	return my captureFromTerminal(termRef, actionName)
+end captureFromTarget
+
+on captureFromTerminal(termRef, actionName)
 	set savedClipboard to missing value
 	set clipboardWasSaved to false
 	set previousClipboardText to ""
@@ -346,7 +351,7 @@ on captureFromTarget(targetToken, actionName)
 
 	my restoreClipboard(savedClipboard, clipboardWasSaved)
 	return captureText
-end captureFromTarget
+end captureFromTerminal
 
 on waitForCaptureClipboard(previousClipboardText)
 	repeat 20 times
@@ -357,7 +362,7 @@ on waitForCaptureClipboard(previousClipboardText)
 			set candidateValue to ""
 		end try
 
-		if candidateValue is not "" and candidateValue is not previousClipboardText then return candidateValue
+		if candidateValue is not "" then return candidateValue
 	end repeat
 
 	return ""

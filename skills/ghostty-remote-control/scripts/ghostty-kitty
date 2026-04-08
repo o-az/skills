@@ -57,12 +57,12 @@ run_helper() {
 }
 
 frontmost_bundle_id() {
-  osascript -e 'tell application "System Events" to get bundle identifier of first application process whose frontmost is true'
+  osascript -e 'tell application "System Events" to get bundle identifier of first application process whose frontmost is true' 2>/dev/null || true
 }
 
 activate_bundle_id() {
   [ -n "${1-}" ] || return 0
-  osascript >/dev/null <<EOF
+  osascript >/dev/null 2>&1 <<EOF || true
 tell application id "$1" to activate
 EOF
 }
