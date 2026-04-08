@@ -2,12 +2,13 @@
 
 Hand-crafted [skills](https://skills.sh) for agents, built from workflows I kept manually repeating.
 
-| Skill                                            | What it does                                                                                                                                                                            |
-| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [screencast](/skills/screencast)                 | Live-stream browser screencasts over WebSocket so others can watch in real time.                                                                                                        |
-| [manipulating-video](/skills/manipulating-video) | Manipulate video files with [`ffmpeg`](https://github.com/ffmpeg/ffmpeg) — speed up/slow down, resize, compress, convert formats, extract audio, convert to GIF, trim, merge, and more. |
-| [upload-image](/skills/upload-image)             | Uploads images to [imgbb](https://ibb.co) — local files, URLs, SVGs, base64, whatever. No more manual hosting.                                                                          |
-| [terminal-recording](/skills/terminal-recording) | Record, upload, and GIF-convert terminal sessions with [`asciinema`](https://github.com/asciinema/asciinema) and [`agg`](https://github.com/asciinema/agg).                             |
+| Skill                                                    | What it does                                                                                                                                                                            |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [screencast](/skills/screencast)                         | Live-stream browser screencasts over WebSocket so others can watch in real time.                                                                                                        |
+| [manipulating-video](/skills/manipulating-video)         | Manipulate video files with [`ffmpeg`](https://github.com/ffmpeg/ffmpeg) — speed up/slow down, resize, compress, convert formats, extract audio, convert to GIF, trim, merge, and more. |
+| [upload-image](/skills/upload-image)                     | Uploads images to [imgbb](https://ibb.co) — local files, URLs, SVGs, base64, whatever. No more manual hosting.                                                                          |
+| [terminal-recording](/skills/terminal-recording)         | Record, upload, and GIF-convert terminal sessions with [`asciinema`](https://github.com/asciinema/asciinema) and [`agg`](https://github.com/asciinema/agg).                             |
+| [ghostty-remote-control](/skills/ghostty-remote-control) | kitty-inspired `kitten` remote control for agents to control ghostty terminal sessions, tabs, and windows.                                                                              |
 
 > [!NOTE]
 > Skills are reusable capabilities for AI agents. They provide procedural knowledge that helps agents accomplish specific tasks more effectively. Skills can include code generation patterns, domain expertise, tool integrations, and more.
