@@ -101,7 +101,7 @@ If the user wants continuous tracking, poll `ls` plus `get-text --extent screen`
 - The kitty-style wrapper intentionally supports only a small, explicit subset of `kitty @`.
 - Supported match syntax is limited to `state:focused`, `id:<terminal-id>`, and `terminal_id:<terminal-id>`.
 - `launch --type window` maps to a Ghostty split rather than a kitty layout-managed window.
-- `launch` accepts `--keep-focus`, `--keep-focus=true`, and `--keep-focus=false`.
+- `launch` accepts `--keep-focus`, `--keep-focus=true`, and `--keep-focus=false`. Use the `=` form for explicit falsey values; a separated token like `--keep-focus false` is treated as a positional command.
 - On the wrapper, `launch --keep-focus` also best-effort restores the previously frontmost macOS app after launch.
 - `snapshot` is a project-specific convenience command, not a native kitty command.
 - The helper captures text through Ghostty actions, so `capture-scrollback` is best-effort.

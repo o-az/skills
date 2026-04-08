@@ -132,17 +132,6 @@ serialize_launch_command() {
   fi
 }
 
-is_bool_token() {
-  case "$1" in
-    1|0|true|false|yes|no|on|off)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
 normalize_bool_token() {
   case "$1" in
     1|true|yes|on)
@@ -328,10 +317,6 @@ case "$command_name" in
         --keep-focus)
           keep_focus=1
           shift
-          if [ "$#" -gt 0 ] && is_bool_token "$1"; then
-            keep_focus=$(normalize_bool_token "$1")
-            shift
-          fi
           ;;
         --keep-focus=*)
           keep_focus=$(normalize_bool_token "${1#--keep-focus=}")

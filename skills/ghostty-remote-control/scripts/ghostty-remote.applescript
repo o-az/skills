@@ -304,6 +304,8 @@ on captureFromTerminal(termRef, actionName)
 	set savedClipboard to missing value
 	set clipboardWasSaved to false
 	set previousClipboardText to ""
+	set captureSentinel to ""
+	set sentinelApplied to false
 	set clipboardCapture to ""
 	set tempPath to ""
 
@@ -321,11 +323,19 @@ on captureFromTerminal(termRef, actionName)
 	end try
 
 	try
+		set captureSentinel to my newCaptureSentinel()
+		set the clipboard to captureSentinel
+		set sentinelApplied to true
+	on error
+		set sentinelApplied to false
+	end try
+
+	try
 		tell application "Ghostty"
 			perform action actionName on termRef
 		end tell
 
-		set clipboardCapture to my waitForCaptureClipboard(previousClipboardText)
+		set clipboardCapture to my waitForCaptureClipboard(previousClipboardText, captureSentinel, sentinelApplied)
 		if clipboardCapture is "" then
 			error "Ghostty did not emit capture data. If this terminal is in an alternate-screen TUI, try capture-screen instead." number 1
 		end if
@@ -353,7 +363,7 @@ on captureFromTerminal(termRef, actionName)
 	return captureText
 end captureFromTerminal
 
-on waitForCaptureClipboard(previousClipboardText)
+on waitForCaptureClipboard(previousClipboardText, captureSentinel, sentinelApplied)
 	repeat 20 times
 		delay 0.1
 		try
@@ -362,11 +372,19 @@ on waitForCaptureClipboard(previousClipboardText)
 			set candidateValue to ""
 		end try
 
-		if candidateValue is not "" then return candidateValue
+		if sentinelApplied then
+			if candidateValue is not "" and candidateValue is not captureSentinel then return candidateValue
+		else
+			if candidateValue is not "" and candidateValue is not previousClipboardText then return candidateValue
+		end if
 	end repeat
 
 	return ""
 end waitForCaptureClipboard
+
+on newCaptureSentinel()
+	return "__ghostty_capture__" & do shell script "/usr/bin/uuidgen"
+end newCaptureSentinel
 
 on readableFileExists(pathText)
 	try
@@ -401,11 +419,13 @@ on windowForTerminal(termRef)
 	set targetId to my terminalID(termRef)
 	tell application "Ghostty"
 		repeat with winRef in windows
-			repeat with candidateTerm in terminals of winRef
-				if my textOrEmpty(id of candidateTerm) is targetId then return winRef
+			repeat with tabRef in tabs of winRef
+				repeat with candidateTerm in terminals of tabRef
+					if my textOrEmpty(id of candidateTerm) is targetId then return winRef
+				end repeat
 			end repeat
 		end repeat
-	end tell
+		end tell
 	error "No Ghostty window found for terminal id " & targetId number 1
 end windowForTerminal
 
@@ -456,11 +476,27 @@ end jsonString
 on jsonEscape(rawText)
 	set escapedText to my replaceText("\\", "\\\\", rawText)
 	set escapedText to my replaceText("\"", "\\\"", escapedText)
-	set escapedText to my replaceText(return, "\\n", escapedText)
-	set escapedText to my replaceText(linefeed, "\\n", escapedText)
-	set escapedText to my replaceText(character id 9, "\\t", escapedText)
+	repeat with controlCode from 0 to 31
+		set escapedText to my replaceText(character id controlCode, my jsonControlEscape(controlCode), escapedText)
+	end repeat
 	return escapedText
 end jsonEscape
+
+on jsonControlEscape(controlCode)
+	if controlCode is 8 then return "\\b"
+	if controlCode is 9 then return "\\t"
+	if controlCode is 10 then return "\\n"
+	if controlCode is 12 then return "\\f"
+	if controlCode is 13 then return "\\r"
+	return "\\u00" & my hexByte(controlCode)
+end jsonControlEscape
+
+on hexByte(numberValue)
+	set hexDigits to "0123456789ABCDEF"
+	set highNibble to (numberValue div 16) + 1
+	set lowNibble to (numberValue mod 16) + 1
+	return character highNibble of hexDigits & character lowNibble of hexDigits
+end hexByte
 
 on replaceText(findText, replaceWith, sourceText)
 	set AppleScript's text item delimiters to findText
