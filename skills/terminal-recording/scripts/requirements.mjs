@@ -66,8 +66,13 @@ function hasEnvVar(key) {
   return typeof process.env[key] === "string" && process.env[key] !== "";
 }
 
+function parseMajorVersion(versionLine) {
+  const match = versionLine.match(/(\d+)\./);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
 function printStatus(kind, name, message) {
-  console.log(`${kind.padEnd(8)} ${name.padEnd(12)} ${message}`);
+  console.log(`${kind.padEnd(12)} ${name.padEnd(12)} ${message}`);
 }
 
 let ok = true;
@@ -83,6 +88,20 @@ for (const { tool, description, installInstructions } of requiredCommands) {
   }
 
   const version = readCommandVersion(tool);
+
+  if (tool === "asciinema") {
+    const major = parseMajorVersion(version);
+    if (major === null || major < 3) {
+      printStatus(
+        "UNSUPPORTED",
+        tool,
+        `${version} (${path}) — asciinema v3+ is required for headless recording. Install: ${installInstructions}`,
+      );
+      ok = false;
+      continue;
+    }
+  }
+
   printStatus("OK", tool, `${version} (${path})`);
 }
 
