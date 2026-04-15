@@ -1,0 +1,65 @@
+{
+  "skill_name": "github-to-markdown",
+  "evals": [
+    {
+      "id": "whole-repo-bundle",
+      "prompt": "Turn github.com/honojs/hono into one markdown document I can hand to an LLM, and save it locally.",
+      "expected_output": "A 2md-based workflow that targets the full repo and saves the generated markdown to a local file.",
+      "assertions": [
+        "The workflow uses the 2md hosted endpoint or CLI",
+        "The target is normalized as a GitHub repository rather than a local path",
+        "The result includes a concrete output file path or filename"
+      ]
+    },
+    {
+      "id": "directory-with-filters",
+      "prompt": "Bundle only the TypeScript source from https://github.com/vercel-labs/json-render/tree/main/examples/dashboard and exclude tests.",
+      "expected_output": "A filtered 2md request for the specified directory using include and exclude parameters.",
+      "assertions": [
+        "The workflow targets the provided directory URL",
+        "The result uses include or exclude query parameters",
+        "The response avoids bundling the whole repository when a directory was requested"
+      ]
+    },
+    {
+      "id": "single-file-cli-command",
+      "prompt": "Give me a rerunnable command to convert https://github.com/honojs/hono/blob/main/README.md into markdown.",
+      "expected_output": "A concrete CLI command using github:o-az/2md that converts the given file URL and can be rerun locally, preferring bunx and falling back to npx --yes.",
+      "assertions": [
+        "The response provides a concrete CLI command using bunx or npx --yes",
+        "The command uses github:o-az/2md",
+        "The command targets the single file URL rather than the repo root"
+      ]
+    },
+    {
+      "id": "nonexistent-repo-error",
+      "prompt": "Convert github.com/nonexistent-user-xyz/fake-repo-abc into markdown.",
+      "expected_output": "The agent attempts the 2md workflow and surfaces the resulting HTTP or 2md error instead of fabricating markdown content.",
+      "assertions": [
+        "The agent does not fabricate markdown content for a nonexistent repo",
+        "The response mentions an error, failure, or inability to fetch the repo",
+        "The workflow still uses 2md rather than inventing an alternate source"
+      ]
+    },
+    {
+      "id": "preserve-non-main-ref",
+      "prompt": "Bundle only docs from https://github.com/example/project/tree/release-1.2/docs and keep that exact ref.",
+      "expected_output": "A directory-scoped 2md workflow that preserves the release-1.2 ref and does not rewrite it to main.",
+      "assertions": [
+        "The workflow preserves the provided non-main ref",
+        "The response does not rewrite the request to main",
+        "The response keeps the scope limited to the requested docs directory"
+      ]
+    },
+    {
+      "id": "local-path-non-trigger",
+      "prompt": "Convert ./src into one markdown document for me.",
+      "expected_output": "The agent recognizes that this skill is for GitHub-hosted input and does not incorrectly treat the local path as a valid 2md target.",
+      "assertions": [
+        "The response does not present ./src as a valid 2md GitHub target",
+        "The response notes that the input is a local path or otherwise outside this skill's normal scope",
+        "The response does not fabricate a github.com URL from the local path"
+      ]
+    }
+  ]
+}

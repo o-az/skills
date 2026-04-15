@@ -34,12 +34,19 @@ Record terminal sessions with [asciinema](https://asciinema.org), upload them, a
 
 ## Available scripts
 
+- `scripts/requirements.mjs` - Checks required tools and optional env vars, then prints what is missing and where to get it.
 - `scripts/finalize-recording.sh` - Uploads a `.cast`, renders a GIF, and prints JSON to stdout.
 - `scripts/headless-record.sh` - Records a non-interactive command to a `.cast` and prints JSON to stdout.
 
 ## Instructions
 
 Choose the recording flow based on whether the environment supports a true interactive terminal.
+
+Run the requirements check first when setup is unknown:
+
+```bash
+node scripts/requirements.mjs
+```
 
 ### Preferred Flow — Non-Interactive / Agent-Driven
 
