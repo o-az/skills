@@ -9,6 +9,7 @@ Hand-crafted [skills](https://skills.sh) for agents, built from workflows I kept
 | [upload-image](/skills/upload-image)                     | Uploads images to [imgbb](https://ibb.co) — local files, URLs, SVGs, base64, whatever. No more manual hosting.                                                                          |
 | [terminal-recording](/skills/terminal-recording)         | Record, upload, and GIF-convert terminal sessions with [`asciinema`](https://github.com/asciinema/asciinema) and [`agg`](https://github.com/asciinema/agg).                             |
 | [ghostty-remote-control](/skills/ghostty-remote-control) | kitty-inspired `kitten` remote control for agents to control ghostty terminal sessions, tabs, and windows.                                                                              |
+| [github-to-markdown](/skills/github-to-markdown)         | Uses [2md](https://github.com/o-az/2md) to convert a GitHub repo, directory, or file into a single markdown document for LLM or documentation workflows.                                |
 
 > [!NOTE]
 > Skills are reusable capabilities for AI agents. They provide procedural knowledge that helps agents accomplish specific tasks more effectively. Skills can include code generation patterns, domain expertise, tool integrations, and more.
