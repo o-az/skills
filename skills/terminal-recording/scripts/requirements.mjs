@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { accessSync, constants } from "node:fs";
-import { delimiter, join } from "node:path";
-import { execFileSync } from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import * as NodeChildProcess from "node:child_process";
 
 const requiredCommands = [
   {
@@ -37,11 +37,11 @@ const optionalKeys = [
 
 function findCommand(command) {
   const pathValue = process.env.PATH ?? "";
-  for (const dir of pathValue.split(delimiter)) {
+  for (const dir of pathValue.split(NodePath.delimiter)) {
     if (!dir) continue;
-    const candidate = join(dir, command);
+    const candidate = NodePath.join(dir, command);
     try {
-      accessSync(candidate, constants.X_OK);
+      NodeFS.accessSync(candidate, NodeFS.constants.X_OK);
       return candidate;
     } catch {
       // keep searching PATH
@@ -61,7 +61,7 @@ function readCommandVersion(command) {
 
   for (const args of attempts) {
     try {
-      const output = execFileSync(command, args, { encoding: "utf8" }).trim();
+      const output = NodeChildProcess.execFileSync(command, args, { encoding: "utf8" }).trim();
       const line = output.split("\n")[0]?.trim();
       if (line) return line;
     } catch {
