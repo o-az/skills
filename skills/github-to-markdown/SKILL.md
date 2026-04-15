@@ -88,40 +88,40 @@ Rules:
 For direct retrieval, use the 2md endpoint:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/owner/repo"
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/owner/repo"
 ```
 
 Directory example:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/owner/repo/tree/<ref>/src"
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/owner/repo/tree/<ref>/src"
 ```
 
 File example:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/owner/repo/blob/<ref>/README.md"
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/owner/repo/blob/<ref>/README.md"
 ```
 
 With filters:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/owner/repo?include=.ts&exclude=.test.ts"
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/owner/repo?include=.ts&exclude=.test.ts"
 ```
 
 With submodules:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/owner/repo?submodules=true"
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/owner/repo?submodules=true"
 ```
 
 When the user wants a saved artifact, write the response to a local file:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/owner/repo" -o repo.md
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/owner/repo" -o repo.md
 ```
 
-If 2md returns an HTTP error, surface the status and response body instead of guessing. Common failures include private repos, nonexistent repos, bad paths, rate limits, timeouts, and other upstream fetch failures.
+If 2md returns an HTTP error, surface the status and response body instead of guessing. Prefer `--fail-with-body` so HTTP failures do not get treated as successful markdown output. Common failures include private repos, nonexistent repos, bad paths, rate limits, timeouts, and other upstream fetch failures.
 
 ### 3. Use the CLI when it is a better fit
 
@@ -203,41 +203,41 @@ If the requested bundle could become very large, warn the user and suggest `incl
 Show a whole repo as markdown:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/o-az/2md"
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/o-az/2md"
 ```
 
 Show a subdirectory as markdown:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/o-az/2md/tree/main/scripts"
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/o-az/2md/tree/main/scripts"
 ```
 
 Show a single file as markdown:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/o-az/2md/blob/main/bunfig.toml"
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/o-az/2md/blob/main/bunfig.toml"
 ```
 
 Show a smaller LLM-focused bundle:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/o-az/2md?include=.tsx&include=.mjs"
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/o-az/2md?include=.tsx&include=.mjs"
 ```
 
 Save a whole repo locally:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/o-az/2md" -o o-az-2md.md
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/o-az/2md" -o o-az-2md.md
 ```
 
 Save a subdirectory locally:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/o-az/2md/tree/main/scripts" -o o-az-2md-scripts.md
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/o-az/2md/tree/main/scripts" -o o-az-2md-scripts.md
 ```
 
 Save a single file locally:
 
 ```bash
-curl --silent --location "https://2md.sauce.wiki/github.com/o-az/2md/blob/main/bunfig.toml" -o o-az-2md-bunfig-toml.md
+curl --silent --show-error --fail-with-body --location "https://2md.sauce.wiki/github.com/o-az/2md/blob/main/bunfig.toml" -o o-az-2md-bunfig-toml.md
 ```

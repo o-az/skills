@@ -43,12 +43,12 @@
     },
     {
       "id": "preserve-non-main-ref",
-      "prompt": "Bundle only docs from https://github.com/example/project/tree/release-1.2/docs and keep that exact ref.",
-      "expected_output": "A directory-scoped 2md workflow that preserves the release-1.2 ref and does not rewrite it to main.",
+      "prompt": "Bundle only the CLI branch source from https://github.com/o-az/2md/tree/cli/src and keep that exact ref.",
+      "expected_output": "A directory-scoped 2md workflow that preserves the cli ref and does not rewrite it to main.",
       "assertions": [
         "The workflow preserves the provided non-main ref",
         "The response does not rewrite the request to main",
-        "The response keeps the scope limited to the requested docs directory"
+        "The response keeps the scope limited to the requested src directory"
       ]
     },
     {
