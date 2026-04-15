@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { accessSync, constants } from "node:fs";
+import { delimiter, join } from "node:path";
 import { execFileSync } from "node:child_process";
 
 const requiredCommands = [
@@ -34,11 +36,19 @@ const optionalKeys = [
 ];
 
 function findCommand(command) {
-  try {
-    return execFileSync("which", [command], { encoding: "utf8" }).trim();
-  } catch {
-    return "";
+  const pathValue = process.env.PATH ?? "";
+  for (const dir of pathValue.split(delimiter)) {
+    if (!dir) continue;
+    const candidate = join(dir, command);
+    try {
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // keep searching PATH
+    }
   }
+
+  return "";
 }
 
 function readCommandVersion(command) {
