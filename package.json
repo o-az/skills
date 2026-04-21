@@ -15,9 +15,9 @@
     "postinstall": "simple-git-hooks"
   },
   "devDependencies": {
-    "@j178/prek": "^0.3.8",
-    "oxfmt": "^0.42.0",
-    "oxlint": "^1.57.0",
+    "@j178/prek": "^0.3.9",
+    "oxfmt": "^0.46.0",
+    "oxlint": "^1.61.0",
     "simple-git-hooks": "^2.13.1"
   },
   "simple-git-hooks": {
