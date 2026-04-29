@@ -48,7 +48,16 @@ cp -R _template skills/<new-skill-name>
    > See scripts in [`skills/screencast`](/skills/screencast) for a skill dependency example
    > Most Skills won't have dependencies.
 
-## Eval Results
+#### More on `skills`
+
+- Specification: [agentskills.io/specification](https:/agentskills.io/specification)
+- `skills` CLI: [skills.sh/docs/cli](https://skills.sh/docs/cli)
+
+---
+
+<details>
+
+<summary>Eval Results</summary>
 
 Latest results (Iteration 4 — Amp, Opus 4.6):
 
@@ -63,12 +72,5 @@ Latest results (Iteration 4 — Amp, Opus 4.6):
 | [`upload-image`](/skills/upload-image)             |   48 |     1.0000 |   0.4305 | +0.5695 |
 
 Full history and benchmark files are in [`evals`](/evals) directory.
-
-<details>
-
-<summary>more on Skills</summary>
-
-- Specification: https://agentskills.io/specification
-- `skills` CLI: https://skills.sh/docs/cli
 
 </details>
