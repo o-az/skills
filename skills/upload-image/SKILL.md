@@ -134,6 +134,8 @@ esac
 
   URL_AUTHORITY="${IMAGE_URL#*://}"
   URL_AUTHORITY="${URL_AUTHORITY%%/*}"
+  URL_AUTHORITY="${URL_AUTHORITY%%\?*}"
+  URL_AUTHORITY="${URL_AUTHORITY%%#*}"
   case "$URL_AUTHORITY" in
     *@*) echo "Refusing URL with userinfo" >&2; exit 1 ;;
   esac
