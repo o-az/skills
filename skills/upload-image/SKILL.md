@@ -186,7 +186,7 @@ esac
     console.error(error.message);
     process.exit(1);
   });
-NODE
+  NODE
   -F "image=${IMAGE_URL}"
   ```
 
