@@ -131,8 +131,27 @@ esac
     http://*|https://*) ;;
     *) echo "Refusing non-http(s) URL" >&2; exit 1 ;;
   esac
-  case "$IMAGE_URL" in
-    *://localhost*|*://127.*|*://10.*|*://172.1[6-9].*|*://172.2[0-9].*|*://172.3[0-1].*|*://192.168.*|*://169.254.*|*://[::1]*|*://metadata.google.internal*|*://169.254.169.254*)
+
+  URL_AUTHORITY="${IMAGE_URL#*://}"
+  URL_AUTHORITY="${URL_AUTHORITY%%/*}"
+  case "$URL_AUTHORITY" in
+    *@*) echo "Refusing URL with userinfo" >&2; exit 1 ;;
+  esac
+
+  URL_HOST="$URL_AUTHORITY"
+  case "$URL_HOST" in
+    \[*\]) URL_HOST="${URL_HOST#[}"; URL_HOST="${URL_HOST%]}" ;;
+    \[*\]:*) URL_HOST="${URL_HOST#[}"; URL_HOST="${URL_HOST%%]*}" ;;
+    *:*) URL_HOST="${URL_HOST%%:*}" ;;
+  esac
+  URL_HOST="$(printf '%s' "$URL_HOST" | tr '[:upper:]' '[:lower:]')"
+
+  case "$URL_HOST" in
+    localhost|*.localhost|metadata.google.internal|169.254.169.254|127.*|10.*|192.168.*|169.254.*|::1|0:0:0:0:0:0:0:1)
+      echo "Refusing local, private, or metadata URL" >&2
+      exit 1
+      ;;
+    172.1[6-9].*|172.2[0-9].*|172.3[0-1].*)
       echo "Refusing local, private, or metadata URL" >&2
       exit 1
       ;;

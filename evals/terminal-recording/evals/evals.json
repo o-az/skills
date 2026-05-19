@@ -4,11 +4,11 @@
     {
       "id": "interactive-recording",
       "prompt": "Record my terminal session about installing dependencies and turn it into a GIF afterward.",
-      "expected_output": "The workflow asks for or infers a topic, prepares a temp directory, records an asciinema cast, uploads it, and renders a GIF.",
+      "expected_output": "The workflow asks for or infers a topic, prepares a temp directory, records an asciinema cast, and renders a local GIF without uploading unless explicitly requested.",
       "assertions": [
-        "The flow uses a topic-based output directory under /tmp",
+        "The flow uses a safe temporary output directory under /tmp",
         "The recording step uses asciinema rec to create a .cast file",
-        "The wrap-up uploads the cast and converts it with agg",
+        "The wrap-up converts the cast with agg without uploading the cast",
         "The final response includes the cast path and GIF path"
       ]
     },
