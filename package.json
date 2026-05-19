@@ -15,12 +15,12 @@
     "format": "oxfmt --write",
     "check": "bun run --parallel --stream --reporter='append-only' format lint",
     "validate-skills": "bash -c 'for dir in skills/*/; do uvx --from skills-ref agentskills validate $dir; done'",
-    "postinstall": "simple-git-hooks"
+    "prepare": "simple-git-hooks"
   },
   "devDependencies": {
-    "@j178/prek": "^0.3.11",
-    "oxfmt": "^0.47.0",
-    "oxlint": "^1.62.0",
+    "@j178/prek": "^0.4.0",
+    "oxfmt": "^0.50.0",
+    "oxlint": "^1.65.0",
     "simple-git-hooks": "^2.13.1"
   },
   "simple-git-hooks": {
