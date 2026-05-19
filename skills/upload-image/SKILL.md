@@ -132,32 +132,61 @@ esac
     *) echo "Refusing non-http(s) URL" >&2; exit 1 ;;
   esac
 
-  URL_AUTHORITY="${IMAGE_URL#*://}"
-  URL_AUTHORITY="${URL_AUTHORITY%%/*}"
-  URL_AUTHORITY="${URL_AUTHORITY%%\?*}"
-  URL_AUTHORITY="${URL_AUTHORITY%%#*}"
-  case "$URL_AUTHORITY" in
-    *@*) echo "Refusing URL with userinfo" >&2; exit 1 ;;
-  esac
+  node - "$IMAGE_URL" <<'NODE'
+  const dns = require('node:dns').promises;
+  const net = require('node:net');
 
-  URL_HOST="$URL_AUTHORITY"
-  case "$URL_HOST" in
-    \[*\]) URL_HOST="${URL_HOST#[}"; URL_HOST="${URL_HOST%]}" ;;
-    \[*\]:*) URL_HOST="${URL_HOST#[}"; URL_HOST="${URL_HOST%%]*}" ;;
-    *:*) URL_HOST="${URL_HOST%%:*}" ;;
-  esac
-  URL_HOST="$(printf '%s' "$URL_HOST" | tr '[:upper:]' '[:lower:]')"
+  function isBlockedAddress(address) {
+    if (net.isIPv4(address)) {
+      const parts = address.split('.').map(Number);
+      return parts[0] === 0 ||
+        parts[0] === 10 ||
+        parts[0] === 127 ||
+        (parts[0] === 169 && parts[1] === 254) ||
+        (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+        (parts[0] === 192 && parts[1] === 168);
+    }
 
-  case "$URL_HOST" in
-    localhost|*.localhost|metadata.google.internal|169.254.169.254|127.*|10.*|192.168.*|169.254.*|::1|0:0:0:0:0:0:0:1)
-      echo "Refusing local, private, or metadata URL" >&2
-      exit 1
-      ;;
-    172.1[6-9].*|172.2[0-9].*|172.3[0-1].*)
-      echo "Refusing local, private, or metadata URL" >&2
-      exit 1
-      ;;
-  esac
+    if (net.isIPv6(address)) {
+      const lower = address.toLowerCase();
+      const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+      return lower === '::1' ||
+        lower === '::' ||
+        lower.startsWith('fe80:') ||
+        lower.startsWith('fc') ||
+        lower.startsWith('fd') ||
+        (mapped && isBlockedAddress(mapped[1]));
+    }
+
+    return true;
+  }
+
+  (async () => {
+    const rawUrl = process.argv[2];
+    const parsed = new URL(rawUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+      throw new Error('Refusing invalid URL or URL with userinfo');
+    }
+
+    const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (host === 'localhost' || host.endsWith('.localhost') || host === 'metadata.google.internal') {
+      throw new Error('Refusing local, private, or metadata URL');
+    }
+
+    if (net.isIP(host)) {
+      if (isBlockedAddress(host)) throw new Error('Refusing local, private, or metadata URL');
+      return;
+    }
+
+    const results = await dns.lookup(host, { all: true, verbatim: true });
+    if (results.length === 0 || results.some((result) => isBlockedAddress(result.address))) {
+      throw new Error('Refusing local, private, or metadata URL');
+    }
+  })().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+NODE
   -F "image=${IMAGE_URL}"
   ```
 
