@@ -25,6 +25,20 @@ fi
 CAST_PATH="$1"
 shift
 
+RESOLVED_DIR="$(dirname "$CAST_PATH")"
+BASE_NAME="$(basename "$CAST_PATH")"
+case "$BASE_NAME" in
+  *[!A-Za-z0-9._-]*|.*|*..*|*.cast.cast)
+    echo "Error: unsafe cast filename. Use only letters, numbers, dots, underscores, and hyphens." >&2
+    exit 2
+    ;;
+  *.cast) ;;
+  *) echo "Error: cast path must end in .cast" >&2; exit 2 ;;
+esac
+case "$CAST_PATH" in
+  *$'\n'*|*$'\r'*) echo "Error: refusing cast path with control characters." >&2; exit 2 ;;
+esac
+
 if [ "$1" != "--" ]; then
   echo "Error: expected -- before the command." >&2
   usage >&2
@@ -32,7 +46,8 @@ if [ "$1" != "--" ]; then
 fi
 shift
 
-mkdir -p "$(dirname "$CAST_PATH")"
+mkdir -p -- "$RESOLVED_DIR"
+CAST_PATH="$(realpath "$CAST_PATH")" || exit 1
 
 if ! command -v asciinema >/dev/null 2>&1; then
   echo "Error: asciinema is required." >&2
