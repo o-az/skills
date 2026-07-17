@@ -1,4 +1,5 @@
 #!/usr/bin/env -S uv run
+
 # /// script
 # requires-python = ">=3.11"
 # dependencies = ["faster-whisper==1.2.1"]
@@ -10,14 +11,18 @@ import math
 from pathlib import Path
 
 
-def transcript_payload(segments, language: str, language_probability: float) -> dict:
+def transcript_payload(
+    segments, language: str, language_probability: float
+) -> dict:
     cues = []
     for segment in segments:
         text = segment.text.strip()
         if not text:
             continue
         if (
-            not all(math.isfinite(value) for value in (segment.start, segment.end))
+            not all(
+                math.isfinite(value) for value in (segment.start, segment.end)
+            )
             or segment.end <= segment.start
         ):
             raise ValueError(
@@ -44,7 +49,8 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     parser.add_argument("--model", default="base")
     parser.add_argument(
-        "--language", help="Optional ISO language code; omit to detect automatically"
+        "--language",
+        help="Optional ISO language code; omit to detect automatically",
     )
     args = parser.parse_args()
 
@@ -62,7 +68,8 @@ def main() -> None:
         list(segments), info.language, info.language_probability
     )
     args.output.write_text(
-        f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n", encoding="utf-8"
+        f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n",
+        encoding="utf-8",
     )
 
 

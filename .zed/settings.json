@@ -1,0 +1,167 @@
+{
+  "terminal": {
+    "shell": "system"
+  },
+  "file_types": {
+    "env": [".env", ".env.*"],
+    "shell": [".envrc"]
+  },
+  "use_autoclose": true,
+  "enable_language_server": true,
+  "formatter": "language_server",
+  "prettier": {
+    "allowed": false
+  },
+  "format_on_save": "on",
+  "load_direnv": "shell_hook",
+  "use_auto_surround": true,
+  "show_completions_on_input": true,
+  "show_completion_documentation": true,
+  "semantic_tokens": "combined",
+  "inlay_hints": {
+    "enabled": true,
+    "show_type_hints": true,
+    "show_other_hints": true,
+    "show_parameter_hints": true
+  },
+  "languages": {
+    "Pkl": {
+      "language_servers": ["pkl"]
+    },
+    "TOML": {
+      "format_on_save": "on",
+      "language_servers": ["tombi"],
+      "show_edit_predictions": false,
+      "formatter": {
+        "language_server": { "name": "tombi" }
+      }
+    },
+    "Python": {
+      "code_actions_on_format": {
+        "source.fixAll.ruff": true,
+        "source.organizeImports.ruff": true
+      },
+      "format_on_save": "on",
+      "language_servers": ["ruff", "pyrefly", "!pyright", "!pylsp"],
+      "formatter": {
+        "language_server": {
+          "name": "ruff"
+        }
+      }
+    },
+    "Markdown": {
+      "format_on_save": "on",
+      "language_servers": ["oxfmt", "oxlint", "markdown-oxide"],
+      "formatter": [
+        {
+          "language_server": {
+            "name": "oxfmt"
+          }
+        }
+      ]
+    },
+    "YAML": {
+      "language_servers": ["oxfmt", "yaml-language-server"],
+      "formatter": [
+        {
+          "language_server": {
+            "name": "oxfmt"
+          }
+        }
+      ]
+    },
+    "JSON": {
+      "format_on_save": "on",
+      "language_servers": ["json-language-server", "oxfmt", "oxlint"],
+      "formatter": [
+        {
+          "language_server": {
+            "name": "oxfmt"
+          }
+        }
+      ]
+    },
+    "JSONC": {
+      "format_on_save": "on",
+      "language_servers": ["json-language-server", "oxfmt", "oxlint"],
+      "formatter": [
+        {
+          "language_server": {
+            "name": "oxfmt"
+          }
+        }
+      ]
+    }
+  },
+  "lsp": {
+    "ruff": {
+      "fetch": {
+        "pre_release": true
+      },
+      "initialization_options": {
+        "settings": {
+          "lineLength": 80,
+          "lint": {
+            "extendSelect": ["I"]
+          }
+        }
+      }
+    },
+    "pyrefly": {
+      "fetch": {
+        "pre_release": true
+      },
+      "binary": {
+        "arguments": ["lsp"]
+      }
+    },
+    "pkl": {
+      "fetch": { "pre_release": true },
+      "binary": { "ignore_system_version": false }
+    },
+    "tombi": {
+      "fetch": { "pre_release": true },
+      "binary": {
+        "arguments": ["lsp", "-v"],
+        "env": { "NO_COLOR": "true" },
+        "ignore_system_version": false
+      }
+    },
+    "gopls": {
+      "binary": {
+        "ignore_system_version": false
+      }
+    }
+  },
+  "hidden_files": [
+    "!**/_/**",
+    ".crush",
+    ".pi",
+    "**/.vscode",
+    "**/.git",
+    "**/.venv",
+    "**/__pycache__",
+    ".direnv",
+    ".ruff_cache",
+    ".DS_Store",
+    "result",
+    "**/.wrangler",
+    "**/.ruff_cache",
+    "**/*.egg-info"
+  ],
+  "file_scan_exclusions": [
+    ".crush",
+    ".direnv",
+    ".DS_Store",
+    "**/*.egg-info",
+    "result",
+    ".pi",
+    "**/.brew",
+    "**/.vscode",
+    "**/.git",
+    "**/.venv",
+    "**/.wrangler",
+    "**/.ruff_cache",
+    "**/__pycache__"
+  ]
+}

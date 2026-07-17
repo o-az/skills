@@ -7,7 +7,9 @@ from pathlib import Path
 
 
 def default_preferences_path() -> Path:
-    config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    config_home = Path(
+        os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+    )
     return config_home / "multilingual-caption-video" / "preferences.json"
 
 
@@ -16,7 +18,10 @@ def validate_preferences(preferences: dict) -> dict:
     unknown = set(preferences) - allowed
     if unknown:
         raise ValueError(f"Unknown preferences: {', '.join(sorted(unknown))}")
-    if "delivery" in preferences and preferences["delivery"] not in {"file", "url"}:
+    if "delivery" in preferences and preferences["delivery"] not in {
+        "file",
+        "url",
+    }:
         raise ValueError("delivery must be 'file' or 'url'")
     if "font_size" in preferences and (
         not isinstance(preferences["font_size"], int)
@@ -26,7 +31,8 @@ def validate_preferences(preferences: dict) -> dict:
         raise ValueError("font_size must be a positive integer")
     for key in ("font", "language"):
         if key in preferences and (
-            not isinstance(preferences[key], str) or not preferences[key].strip()
+            not isinstance(preferences[key], str)
+            or not preferences[key].strip()
         ):
             raise ValueError(f"{key} must be a non-empty string")
     return dict(sorted(preferences.items()))

@@ -14,7 +14,9 @@ KEEP = ".keep"
 
 
 def create_workdir(parent: Path | None = None) -> Path:
-    workdir = Path(tempfile.mkdtemp(prefix="caption-video.", dir=parent)).resolve()
+    workdir = Path(
+        tempfile.mkdtemp(prefix="caption-video.", dir=parent)
+    ).resolve()
     (workdir / MARKER).write_text(f"{workdir}\n", encoding="utf-8")
     return workdir
 
@@ -87,7 +89,10 @@ def main() -> None:
     elif args.command == "schedule":
         print(
             json.dumps(
-                {"pid": schedule_cleanup(args.path, args.delay), "delay": args.delay}
+                {
+                    "pid": schedule_cleanup(args.path, args.delay),
+                    "delay": args.delay,
+                }
             )
         )
     elif args.command == "keep":

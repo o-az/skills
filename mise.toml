@@ -8,6 +8,7 @@ color_theme = "charm"
 minimum_release_age_excludes = ["bun", "node", "npm:oxfmt", "npm:oxlint"]
 
 [tools]
+uv = "latest"
 bun = "latest"
 node = "latest"
 tombi = "latest"

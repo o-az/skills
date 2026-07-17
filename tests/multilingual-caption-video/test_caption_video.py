@@ -7,7 +7,10 @@ import time
 from pathlib import Path
 
 SCRIPTS = (
-    Path(__file__).parents[2] / "skills" / "multilingual-caption-video" / "scripts"
+    Path(__file__).parents[2]
+    / "skills"
+    / "multilingual-caption-video"
+    / "scripts"
 )
 sys.path.insert(0, str(SCRIPTS))
 sys.dont_write_bytecode = True
