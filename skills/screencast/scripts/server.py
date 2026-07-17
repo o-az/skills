@@ -1,5 +1,7 @@
+#!/usr/bin/env -S uv run --script
+
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.14.6"
 # dependencies = ["websockets==15.0.1"]
 # ///
 
@@ -28,14 +30,14 @@ Requirements:
   uv run installs the inline dependencies declared above
 """
 
-import os
-import sys
-import json
-import signal
-import base64
-import asyncio
 import argparse
+import asyncio
+import base64
+import json
+import os
+import signal
 import subprocess
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -43,6 +45,7 @@ from urllib.parse import unquote, urlparse
 from urllib.request import urlopen
 
 import websockets
+from websockets.asyncio.client import ClientConnection
 from websockets.http11 import Response
 
 BIND_HOST = os.environ.get("BIND_HOST", "127.0.0.1")
@@ -51,7 +54,9 @@ QUALITY = int(os.environ.get("QUALITY", "40"))
 MAX_WIDTH = int(os.environ.get("MAX_WIDTH", "960"))
 MAX_HEIGHT = int(os.environ.get("MAX_HEIGHT", "540"))
 EVERY_NTH = int(os.environ.get("EVERY_NTH", "1"))
-IDLE_TIMEOUT = int(os.environ.get("IDLE_TIMEOUT", "1800"))  # seconds, 0 = disabled
+IDLE_TIMEOUT = int(
+    os.environ.get("IDLE_TIMEOUT", "1800")
+)  # seconds, 0 = disabled
 
 # --- CDP discovery ---
 
@@ -74,12 +79,18 @@ def discover_cdp_url() -> str:
         if url.startswith("ws"):
             return url
     except Exception as e:
-        print(f"[relay] agent-browser discovery failed: {e}", file=sys.stderr, flush=True)
+        print(
+            f"[relay] agent-browser discovery failed: {e}",
+            file=sys.stderr,
+            flush=True,
+        )
 
     # Common CDP ports
     for port in (9222, 9229):
         try:
-            with urlopen(f"http://127.0.0.1:{port}/json/version", timeout=2) as resp:
+            with urlopen(
+                f"http://127.0.0.1:{port}/json/version", timeout=2
+            ) as resp:
                 data = json.loads(resp.read())
                 if ws_url := data.get("webSocketDebuggerUrl"):
                     return ws_url
@@ -102,7 +113,11 @@ def get_page_target(browser_ws_url: str) -> str:
                 if t.get("type") == "page" and t.get("webSocketDebuggerUrl"):
                     return t["webSocketDebuggerUrl"]
     except Exception as e:
-        print(f"[relay] Failed to list page targets: {e}", file=sys.stderr, flush=True)
+        print(
+            f"[relay] Failed to list page targets: {e}",
+            file=sys.stderr,
+            flush=True,
+        )
     return browser_ws_url
 
 
@@ -113,7 +128,7 @@ class CdpClient:
     def __init__(self, url: str):
         self._url = url
         self._next_id = 1
-        self._ws = None
+        self._ws: ClientConnection | None = None
         self._handlers: dict[str, Callable] = {}
         self._pending: dict[int, asyncio.Future] = {}
         self._listen_task = None
@@ -123,6 +138,7 @@ class CdpClient:
         self._listen_task = asyncio.create_task(self._listen())
 
     async def _listen(self):
+        assert self._ws is not None
         try:
             async for raw in self._ws:
                 msg = json.loads(raw)
@@ -130,7 +146,9 @@ class CdpClient:
                     fut = self._pending.pop(msg["id"], None)
                     if fut and not fut.done():
                         if "error" in msg:
-                            fut.set_exception(RuntimeError(msg["error"]["message"]))
+                            fut.set_exception(
+                                RuntimeError(msg["error"]["message"])
+                            )
                         else:
                             fut.set_result(msg.get("result"))
                 elif "method" in msg:
@@ -141,7 +159,11 @@ class CdpClient:
                             if asyncio.iscoroutine(result):
                                 await result
                         except Exception as e:
-                            print(f"[relay] Event handler error: {e}", file=sys.stderr, flush=True)
+                            print(
+                                f"[relay] Event handler error: {e}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
         except websockets.ConnectionClosed:
             pass
         finally:
@@ -150,7 +172,8 @@ class CdpClient:
                     fut.set_exception(RuntimeError("CDP connection closed"))
             self._pending.clear()
 
-    async def send(self, method: str, params: dict = None):
+    async def send(self, method: str, params: dict | None = None):
+        assert self._ws is not None
         msg_id = self._next_id
         self._next_id += 1
         fut = asyncio.get_running_loop().create_future()
@@ -165,14 +188,15 @@ class CdpClient:
 
     async def close(self):
         try:
-            await self._ws.close()
+            if self._ws is not None:
+                await self._ws.close()
         except Exception:
             pass
         if self._listen_task:
             self._listen_task.cancel()
             try:
                 await self._listen_task
-            except (asyncio.CancelledError, Exception):
+            except asyncio.CancelledError, Exception:
                 pass
 
 
@@ -333,6 +357,7 @@ def parse_args() -> argparse.Namespace:
         parser.error("--bind-host must not be empty")
     return args
 
+
 VIEWER_HTML_BYTES = VIEWER_HTML.encode()
 
 
@@ -412,26 +437,34 @@ async def main():
 
     cdp.on("Page.screencastFrame", on_screencast_frame)
 
-    await cdp.send("Page.startScreencast", {
-        "format": "jpeg",
-        "quality": cfg.quality,
-        "maxWidth": cfg.max_width,
-        "maxHeight": cfg.max_height,
-        "everyNthFrame": 1,
-    })
-    print(f"[relay] Screencast started (quality={cfg.quality}, {cfg.max_width}x{cfg.max_height})", flush=True)
+    await cdp.send(
+        "Page.startScreencast",
+        {
+            "format": "jpeg",
+            "quality": cfg.quality,
+            "maxWidth": cfg.max_width,
+            "maxHeight": cfg.max_height,
+            "everyNthFrame": 1,
+        },
+    )
+    print(
+        f"[relay] Screencast started (quality={cfg.quality}, {cfg.max_width}x{cfg.max_height})",
+        flush=True,
+    )
 
     # --- WebSocket + HTTP server ---
 
     async def process_request(connection, request):
         if request.path == "/health":
-            body = json.dumps({
-                "status": "ok",
-                "viewers": len(viewers),
-                "frames": frame_number,
-                "bind_host": cfg.bind_host,
-                "meta": latest_meta,
-            }).encode()
+            body = json.dumps(
+                {
+                    "status": "ok",
+                    "viewers": len(viewers),
+                    "frames": frame_number,
+                    "bind_host": cfg.bind_host,
+                    "meta": latest_meta,
+                }
+            ).encode()
             return Response(
                 HTTPStatus.OK,
                 "OK",
@@ -443,7 +476,9 @@ async def main():
             return Response(
                 HTTPStatus.OK,
                 "OK",
-                websockets.Headers({"Content-Type": "text/html; charset=utf-8"}),
+                websockets.Headers(
+                    {"Content-Type": "text/html; charset=utf-8"}
+                ),
                 VIEWER_HTML_BYTES,
             )
 
@@ -456,13 +491,18 @@ async def main():
             if latest_frame is not None:
                 await ws.send(latest_frame)
             await broadcast_viewer_count()
-            print(f"[relay] Viewer connected ({len(viewers)} total)", flush=True)
+            print(
+                f"[relay] Viewer connected ({len(viewers)} total)", flush=True
+            )
             async for _ in ws:
                 pass
         finally:
             viewers.discard(ws)
             await broadcast_viewer_count()
-            print(f"[relay] Viewer disconnected ({len(viewers)} total)", flush=True)
+            print(
+                f"[relay] Viewer disconnected ({len(viewers)} total)",
+                flush=True,
+            )
 
     # --- File watcher: reload browser on demo file changes ---
 
@@ -472,7 +512,12 @@ async def main():
             changed = False
             try:
                 for root, dirs, files in os.walk(directory):
-                    dirs[:] = [d for d in dirs if d not in {".git", "node_modules", "__pycache__", ".next"}]
+                    dirs[:] = [
+                        d
+                        for d in dirs
+                        if d
+                        not in {".git", "node_modules", "__pycache__", ".next"}
+                    ]
                     for f in files:
                         path = os.path.join(root, f)
                         mtime = os.path.getmtime(path)
@@ -481,19 +526,29 @@ async def main():
                             print(f"[relay] File changed: {path}", flush=True)
                         mtimes[path] = mtime
             except Exception as e:
-                print(f"[relay] File watch error: {e}", file=sys.stderr, flush=True)
+                print(
+                    f"[relay] File watch error: {e}",
+                    file=sys.stderr,
+                    flush=True,
+                )
             if changed:
                 try:
                     await cdp.send("Page.reload")
                 except Exception as e:
-                    print(f"[relay] Reload failed: {e}", file=sys.stderr, flush=True)
+                    print(
+                        f"[relay] Reload failed: {e}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
             await asyncio.sleep(interval)
 
     # Determine watch dir: WATCH env, or auto-detect from browser's file:// URL
     watch_dir = os.environ.get("WATCH")
     if not watch_dir:
         try:
-            result = await cdp.send("Runtime.evaluate", {"expression": "location.href"})
+            result = await cdp.send(
+                "Runtime.evaluate", {"expression": "location.href"}
+            )
             page_url = result.get("result", {}).get("value", "")
             if page_url.startswith("file://"):
                 file_path = unquote(page_url[7:])
@@ -514,8 +569,14 @@ async def main():
         else:
             viewer_host = cfg.bind_host
         print(f"[relay] Viewer page: http://localhost:{cfg.port}", flush=True)
-        print(f"[relay] Health check: http://localhost:{cfg.port}/health", flush=True)
-        print(f"[relay] Bound to {cfg.bind_host}:{cfg.port} (viewer host hint: {viewer_host})", flush=True)
+        print(
+            f"[relay] Health check: http://localhost:{cfg.port}/health",
+            flush=True,
+        )
+        print(
+            f"[relay] Bound to {cfg.bind_host}:{cfg.port} (viewer host hint: {viewer_host})",
+            flush=True,
+        )
 
         shutdown_event = asyncio.Event()
         loop = asyncio.get_running_loop()
@@ -527,11 +588,18 @@ async def main():
                 await asyncio.sleep(60)
                 idle = loop.time() - last_activity
                 if idle >= cfg.idle_timeout:
-                    print(f"[relay] Idle for {int(idle)}s, shutting down", flush=True)
+                    print(
+                        f"[relay] Idle for {int(idle)}s, shutting down",
+                        flush=True,
+                    )
                     shutdown_event.set()
                     return
 
-        idle_task = asyncio.create_task(idle_watchdog()) if cfg.idle_timeout > 0 else None
+        idle_task = (
+            asyncio.create_task(idle_watchdog())
+            if cfg.idle_timeout > 0
+            else None
+        )
 
         await shutdown_event.wait()
         print("\n[relay] Shutting down...", flush=True)

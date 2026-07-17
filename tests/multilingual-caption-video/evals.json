@@ -1,0 +1,32 @@
+{
+  "skill_name": "multilingual-caption-video",
+  "evals": [
+    {
+      "id": "english-url-to-arabic-url",
+      "prompt": "Add Arabic captions to this English video and send me the finished MP4 link: https://example.com/video.mp4",
+      "expected_output": "A verified MP4 with burned-in Arabic captions delivered as a shareable URL.",
+      "assertions": [
+        "Uses the explicitly requested Arabic language and URL delivery without asking for those choices again",
+        "Asks whether the user wants the current choices persisted before writing preferences",
+        "Downloads only the requested video without a playlist",
+        "Uses timestamped multilingual transcription and Arabic translation",
+        "Visually inspects the rendered captions before uploading",
+        "Returns an HTTP(S) link to the generated MP4",
+        "Announces and schedules cleanup only after successful delivery"
+      ]
+    },
+    {
+      "id": "non-english-local-missing-delivery",
+      "prompt": "Take /tmp/spanish-interview.mov and add Arabic subtitles.",
+      "expected_output": "The agent asks whether to deliver a file or URL, then produces a verified MP4 preserving the Spanish video's timing and audio with readable Arabic captions.",
+      "assertions": [
+        "Asks for file or URL delivery when neither the request nor saved preferences specify it",
+        "Does not overwrite or delete the local source file",
+        "Transcribes the non-English source with the multilingual model",
+        "Uses the requested, saved, or default font size in that priority order",
+        "Probes and visually checks the final MP4 before delivery",
+        "Deletes only the marked generated work directory after the cleanup grace period"
+      ]
+    }
+  ]
+}
