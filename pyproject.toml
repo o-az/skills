@@ -12,4 +12,7 @@ ignore-missing-imports = ["faster_whisper"]
 line-length = 80
 
 [dependency-groups]
-dev = ["pyrefly>=1.1.1", "ruff>=0.15.22", "websockets>=16.1"]
+dev = [
+    "pyrefly>=1.1.1",
+    "ruff>=0.15.22",
+]
