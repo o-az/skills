@@ -1,0 +1,27 @@
+{
+  "skill_name": "multilingual-caption-video",
+  "evals": [
+    {
+      "id": "english-url-to-arabic",
+      "prompt": "Add Arabic captions to this English video and send me the finished MP4 link: https://example.com/video.mp4",
+      "expected_output": "A verified MP4 with burned-in Arabic captions and a shareable URL.",
+      "assertions": [
+        "Downloads only the requested video without a playlist",
+        "Uses timestamped multilingual transcription and Arabic translation",
+        "Visually inspects the rendered captions before uploading",
+        "Returns an HTTP(S) link to the generated MP4"
+      ]
+    },
+    {
+      "id": "non-english-local-to-arabic",
+      "prompt": "Take /tmp/spanish-interview.mov, add Arabic subtitles, and return an MP4 link.",
+      "expected_output": "A verified MP4 preserving the Spanish video's timing and audio with readable Arabic captions burned in.",
+      "assertions": [
+        "Does not overwrite the local source file",
+        "Transcribes the non-English source with the multilingual model",
+        "Defaults to subtitle font size 26 and an Arabic-capable font",
+        "Probes and visually checks the final MP4 before uploading"
+      ]
+    }
+  ]
+}
