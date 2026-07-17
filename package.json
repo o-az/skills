@@ -18,9 +18,9 @@
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {
-    "@j178/prek": "^0.4.0",
-    "oxfmt": "^0.50.0",
-    "oxlint": "^1.65.0",
+    "@j178/prek": "^0.4.10",
+    "oxfmt": "^0.59.0",
+    "oxlint": "^1.74.0",
     "simple-git-hooks": "^2.13.1"
   },
   "simple-git-hooks": {

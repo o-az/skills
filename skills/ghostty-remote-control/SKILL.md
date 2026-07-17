@@ -155,11 +155,11 @@ echo "$output" | tail -3
 
 **Shell syntax differences:**
 
-| Shell    | Chain commands   | Conditionals          | Notes                 |
+| Shell | Chain commands | Conditionals | Notes |
 | -------- | ---------------- | --------------------- | --------------------- | --- | ---------------------- |
-| bash/zsh | `cmd1 && cmd2`   | `[[ -f file ]]`       | POSIX standard        |
-| fish     | `cmd1; and cmd2` | `test -f file`        | No `&&`/`             |     | `; uses `; and`/`; or` |
-| nushell  | `cmd1 \| cmd2`   | `($env.FOO == "bar")` | Pipes for composition |
+| bash/zsh | `cmd1 && cmd2` | `[[ -f file ]]` | POSIX standard |
+| fish | `cmd1; and cmd2` | `test -f file` | No `&&`/`            |     |`; uses `; and`/`; or` |
+| nushell | `cmd1 \| cmd2` | `($env.FOO == "bar")` | Pipes for composition |
 
 **Rule of thumb:**
 
