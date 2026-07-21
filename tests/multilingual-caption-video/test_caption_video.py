@@ -19,6 +19,7 @@ sys.path.insert(0, str(SCRIPTS))
 sys.dont_write_bytecode = True
 
 from cleanup import create_workdir, keep_workdir, schedule_cleanup
+from download import download_options, validate_video_url
 from make_ass import build_ass
 from preferences import (
     default_preferences_path,
@@ -59,6 +60,30 @@ ass = build_ass(
 assert "PlayResX: 1080" in ass
 assert "Style: Default,Noto Naskh Arabic UI,35," in ass
 assert "Dialogue: 0,0:00:01.25,0:00:03.50" in ass
+
+assert validate_video_url("https://8.8.8.8/video.mp4") == (
+    "https://8.8.8.8/video.mp4"
+)
+for unsafe_url in (
+    "file:///tmp/video.mp4",
+    "https://user:password@example.com/video.mp4",
+    "http://127.0.0.1/video.mp4",
+    "http://169.254.169.254/latest/meta-data/",
+):
+    try:
+        validate_video_url(unsafe_url)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError(f"Unsafe video URL should fail: {unsafe_url}")
+
+download_workdir = Path("/tmp/caption-video.test")
+options = download_options(download_workdir)
+assert options["noplaylist"] is True
+assert options["merge_output_format"] == "mp4"
+assert options["outtmpl"] == {
+    "default": "/tmp/caption-video.test/source.%(ext)s"
+}
 
 cleanup_script = SCRIPTS / "cleanup.py"
 with tempfile.TemporaryDirectory() as temporary_directory:

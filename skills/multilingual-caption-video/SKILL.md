@@ -2,7 +2,7 @@
 name: multilingual-caption-video
 description: "Burn translated captions into a local video or video URL and deliver the finished MP4 as a file or shareable link. Use when a user asks to subtitle, caption, translate, or hardcode subtitles into a video in a specified language."
 license: "GPL-3.0-or-Later"
-compatibility: Requires ffmpeg and ffprobe with libass and H.264 support, uv, yt-dlp for URL inputs, and curl for URL delivery.
+compatibility: Requires uv and ffmpeg/ffprobe with libass and H.264 support. URL delivery requires a platform uploader or curl.
 metadata:
   author: o-az
   version: "1.1.1"
@@ -14,16 +14,16 @@ Transcribe the video's spoken language, translate the timestamped transcript int
 
 ## Requirements
 
-- `ffmpeg` and `ffprobe` with libass and H.264 support
 - `uv`
-- `yt-dlp` for URL inputs
-- `curl` for URL delivery
+- `ffmpeg` and `ffprobe` with libass and H.264 support
+- A platform upload capability or `curl` only when URL delivery is requested
 - Network access for the transcription model, URL downloads, and uploads
 
-The transcription helper uses `faster-whisper==1.2.1` with the multilingual Whisper `base` model. The first run installs the pinned Python dependency and downloads the model into the normal `uv` and Hugging Face caches.
+The bundled Python scripts declare their own dependencies using inline script metadata. `uv run --script` resolves them automatically; no global `yt-dlp` or `faster-whisper` installation is required. The transcription helper uses `faster-whisper==1.2.1` with the multilingual Whisper `base` model and downloads the model into the normal Hugging Face cache on first use.
 
 ## Bundled scripts
 
+- `scripts/download.py` downloads one public URL using its uv-managed `yt-dlp` Python dependency and prints the final local path.
 - `scripts/transcribe.py` detects the spoken language, transcribes the video, and emits timestamped JSON.
 - `scripts/make_ass.py` converts translated caption JSON into styled ASS subtitles.
 - `scripts/preferences.py` reads and, only with explicit user consent, saves sparse JSON preferences.
@@ -45,6 +45,7 @@ Run any script with `uv run <script> --help` for its interface.
 - Write preferences only after explicit consent. An explicit request always overrides a saved preference for that job.
 - Delete only marked working directories created by `scripts/cleanup.py`.
 - Run bundled scripts as the current unprivileged user. Never invoke them through `sudo` or another privilege-elevation mechanism.
+- Once all required choices are resolved, tell the user: “I will start the process now end to end and ping you once I'm fully done. If you would like me to update you continuously after each step, let me know—otherwise I'll ping you once done or if I come across any issues.” Do not send routine progress updates unless the user opts in; always report failures, blockers, or required decisions promptly.
 
 ## Workflow
 
@@ -81,10 +82,10 @@ Keep all downloaded and generated assets inside this directory. Keep the source 
 For a local file, resolve its absolute path and verify it is a regular video file. For a URL, accept only an explicit user-provided HTTP(S) URL and download one video:
 
 ```bash
-yt-dlp --no-playlist --merge-output-format mp4 -o "$WORK_DIR/source.%(ext)s" "<VIDEO_URL>"
+SOURCE="$(uv run --script "$SKILL_ROOT/scripts/download.py" "<VIDEO_URL>" "$WORK_DIR")"
 ```
 
-Find the downloaded file, then probe the source:
+The downloader rejects credentials and hosts resolving to non-public addresses, disables playlists, writes only inside the marked work directory, and reports the final path after yt-dlp post-processing. Probe the source:
 
 ```bash
 ffprobe -v error -show_entries format=duration -show_entries stream=codec_type,codec_name,width,height -of json "<SOURCE>"
@@ -119,7 +120,17 @@ Keep names, numbers, tone, and meaning accurate. When the source already uses th
 
 ### 6. Generate ASS subtitles
 
-Read the video width and height from `ffprobe`. Check an appropriate installed font with `fc-match` when available. For Arabic, start with:
+Read the video width and height from `ffprobe`. Select a font already installed on the system that covers the target language's script. Honor an explicit or saved font when it is installed and compatible; otherwise choose a suitable installed font without asking the user to install one or approve the fallback.
+
+Inspect fonts using the operating system's available facilities instead of assuming `fc-match` exists:
+
+- Linux and other Fontconfig systems: use `fc-match` or `fc-list` when available.
+- macOS: inspect font families with CoreText-aware tools such as `system_profiler SPFontsDataType`, or inspect `/System/Library/Fonts`, `/Library/Fonts`, and `~/Library/Fonts`. Use the font family name rather than only its filename.
+- Windows: inspect the Windows Fonts directory or installed-font registry entries with PowerShell.
+
+For Arabic, prefer an installed `Noto Naskh Arabic UI`, `Noto Sans Arabic`, `Geeza Pro`, `SF Arabic`, or another Arabic-capable font. Confirm from the render logs or a preview frame that the renderer selected a font containing the required glyphs.
+
+For example, on a Fontconfig system:
 
 ```bash
 fc-match "Noto Naskh Arabic UI"
@@ -151,8 +162,10 @@ ffprobe -v error -show_entries format=duration -show_entries stream=codec_type,c
 Extract at least one frame during speech and inspect it with an available image or vision tool:
 
 ```bash
-ffmpeg -y -ss <SPEECH_TIMESTAMP> -i "$WORK_DIR/captioned.mp4" -frames:v 1 "$WORK_DIR/caption-preview.png"
+ffmpeg -y -ss <SPEECH_TIMESTAMP> -i "$WORK_DIR/captioned.mp4" -frames:v 1 -vf "scale='min(1280,iw)':-2" -q:v 3 "$WORK_DIR/caption-preview.jpg"
 ```
+
+Before sending each preview to an image or vision tool, check its byte size against that tool's upload limit. If the limit is unknown, keep the preview below 1 MiB. If it is too large, reduce the dimensions or JPEG quality, then check again; never invoke the inspection tool with a known-oversized image.
 
 Confirm that captions are present, correctly shaped, legible, inside the safe area, and no more than two lines; video and audio both play; duration and dimensions match the source; and the source remains unchanged. Fix the caption data or style and render again when verification fails.
 
@@ -165,6 +178,8 @@ curl --fail-with-body --silent --show-error --request POST --form "file=@$WORK_D
 ```
 
 Validate that an upload response is an HTTP(S) URL. Return only the requested delivery form unless the user asks for both. Include the target language, and do not claim completion without a successful probe and visual inspection.
+
+In the successful result, tell the user: “I used font <FONT>, which was available on your system. If you'd like to use a different font or size, or another subtitle style, let me know.” Substitute the actual selected font name.
 
 ### 10. Announce and schedule cleanup
 
