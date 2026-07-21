@@ -5,7 +5,7 @@ license: "GPL-3.0-or-Later"
 compatibility: Requires ffmpeg and ffprobe with libass and H.264 support, uv, yt-dlp for URL inputs, and curl for URL delivery.
 metadata:
   author: o-az
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
 # multilingual-caption-video
@@ -44,6 +44,7 @@ Run any script with `uv run <script> --help` for its interface.
 - Deliver only the generated MP4. A request for a URL authorizes uploading that generated file, not unrelated local files.
 - Write preferences only after explicit consent. An explicit request always overrides a saved preference for that job.
 - Delete only marked working directories created by `scripts/cleanup.py`.
+- Run bundled scripts as the current unprivileged user. Never invoke them through `sudo` or another privilege-elevation mechanism.
 
 ## Workflow
 
@@ -55,7 +56,7 @@ Resolve the directory containing this `SKILL.md` as `SKILL_ROOT`, then inspect s
 uv run "$SKILL_ROOT/scripts/preferences.py" show
 ```
 
-Preferences live at `${XDG_CONFIG_HOME:-~/.config}/multilingual-caption-video/preferences.json`. The file may contain `delivery`, `language`, `font`, and `font_size`.
+Preferences live at `$XDG_CONFIG_HOME/multilingual-caption-video/preferences.json` when `XDG_CONFIG_HOME` is an absolute path, or `~/.config/multilingual-caption-video/preferences.json` otherwise. The file may contain `delivery`, `language`, `font`, and `font_size`.
 
 Resolve each setting in this order: the current request, a saved preference, then the documented default. If neither the request nor saved preferences specify `delivery`, ask whether the user wants the finished video as a file or URL. If neither specifies the target language, ask for it. Do not infer either choice.
 

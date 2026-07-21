@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
@@ -12,9 +13,11 @@ type Preferences = dict[str, str | int]
 
 
 def default_preferences_path() -> Path:
-    config_home = Path(
-        os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
-    )
+    default_config_home = Path.home() / ".config"
+    configured = os.environ.get("XDG_CONFIG_HOME")
+    config_home = Path(configured) if configured else default_config_home
+    if not config_home.is_absolute():
+        config_home = default_config_home
     return config_home / "multilingual-caption-video" / "preferences.json"
 
 
@@ -45,9 +48,11 @@ def validate_preferences(preferences: Mapping[str, object]) -> Preferences:
 
 def load_preferences(path: Path | None = None) -> Preferences:
     path = path or default_preferences_path()
-    if not path.exists():
+    try:
+        serialized = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return {}
-    return validate_preferences(json.loads(path.read_text(encoding="utf-8")))
+    return validate_preferences(json.loads(serialized))
 
 
 def save_preferences(
@@ -55,13 +60,24 @@ def save_preferences(
 ) -> Preferences:
     path = path or default_preferences_path()
     preferences = validate_preferences({**load_preferences(path), **updates})
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary_path = path.with_suffix(".tmp")
-    temporary_path.write_text(
-        f"{json.dumps(preferences, indent=2, ensure_ascii=False, sort_keys=True)}\n",
-        encoding="utf-8",
-    )
-    os.replace(temporary_path, path)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    serialized = f"{json.dumps(preferences, indent=2, ensure_ascii=False, sort_keys=True)}\n"
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+            temporary_file.write(serialized)
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
     return preferences
 
 

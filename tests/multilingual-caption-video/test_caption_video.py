@@ -1,10 +1,13 @@
 #!/usr/bin/env -S uv run
 
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPTS = (
     Path(__file__).parents[2]
@@ -17,7 +20,11 @@ sys.dont_write_bytecode = True
 
 from cleanup import create_workdir, keep_workdir, schedule_cleanup
 from make_ass import build_ass
-from preferences import load_preferences, save_preferences
+from preferences import (
+    default_preferences_path,
+    load_preferences,
+    save_preferences,
+)
 from transcribe import transcript_payload
 
 
@@ -53,6 +60,48 @@ assert "PlayResX: 1080" in ass
 assert "Style: Default,Noto Naskh Arabic UI,35," in ass
 assert "Dialogue: 0,0:00:01.25,0:00:03.50" in ass
 
+cleanup_script = SCRIPTS / "cleanup.py"
+with tempfile.TemporaryDirectory() as temporary_directory:
+    unsupported_parent = subprocess.run(
+        [
+            sys.executable,
+            str(cleanup_script),
+            "create",
+            "--parent",
+            temporary_directory,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert unsupported_parent.returncode != 0
+    assert "unrecognized arguments: --parent" in unsupported_parent.stderr
+
+original_xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
+try:
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        absolute_config_home = Path(temporary_directory)
+        os.environ["XDG_CONFIG_HOME"] = str(absolute_config_home)
+        assert default_preferences_path() == (
+            absolute_config_home
+            / "multilingual-caption-video"
+            / "preferences.json"
+        )
+
+    for invalid_config_home in ("", "relative/config"):
+        os.environ["XDG_CONFIG_HOME"] = invalid_config_home
+        assert default_preferences_path() == (
+            Path.home()
+            / ".config"
+            / "multilingual-caption-video"
+            / "preferences.json"
+        )
+finally:
+    if original_xdg_config_home is None:
+        os.environ.pop("XDG_CONFIG_HOME", None)
+    else:
+        os.environ["XDG_CONFIG_HOME"] = original_xdg_config_home
+
 with tempfile.TemporaryDirectory() as temporary_directory:
     preferences_path = Path(temporary_directory) / "preferences.json"
     assert load_preferences(preferences_path) == {}
@@ -69,6 +118,34 @@ with tempfile.TemporaryDirectory() as temporary_directory:
         assert "delivery" in str(error)
     else:
         raise AssertionError("Unsupported delivery preference should fail")
+
+    victim_path = Path(temporary_directory) / "victim.txt"
+    victim_path.write_text("unchanged\n")
+    predictable_temporary_path = preferences_path.with_suffix(".tmp")
+    predictable_temporary_path.symlink_to(victim_path)
+    save_preferences({"language": "Spanish"}, preferences_path)
+    assert victim_path.read_text() == "unchanged\n"
+    assert predictable_temporary_path.is_symlink()
+
+    destination_target = Path(temporary_directory) / "destination-target.json"
+    destination_target.write_text('{"language": "English"}\n')
+    preferences_path.unlink()
+    preferences_path.symlink_to(destination_target)
+    save_preferences({"language": "Arabic"}, preferences_path)
+    assert not preferences_path.is_symlink()
+    assert destination_target.read_text() == '{"language": "English"}\n'
+
+    failed_preferences_path = (
+        Path(temporary_directory) / "failed" / "preferences.json"
+    )
+    with patch("preferences.os.replace", side_effect=OSError("replace failed")):
+        try:
+            save_preferences({"language": "French"}, failed_preferences_path)
+        except OSError as error:
+            assert str(error) == "replace failed"
+        else:
+            raise AssertionError("A failed preferences replacement should fail")
+    assert list(failed_preferences_path.parent.glob("*.tmp")) == []
 
     cleanup_root = Path(temporary_directory) / "cleanup"
     cleanup_root.mkdir()
