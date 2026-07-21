@@ -4,13 +4,17 @@ import argparse
 import json
 import math
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
+
+
+CAPTION_STYLES = {"Default", "DarkOnLight", "Boxed"}
 
 
 class CaptionCue(TypedDict):
     start: float
     end: float
     text: str
+    style: NotRequired[str]
 
 
 def ass_time(seconds: float) -> str:
@@ -69,6 +73,7 @@ def build_ass(
     dialogue = []
     for cue in cues:
         start, end, text = cue.get("start"), cue.get("end"), cue.get("text")
+        style = cue.get("style", "Default")
         if (
             not isinstance(start, (int, float))
             or isinstance(start, bool)
@@ -81,8 +86,10 @@ def build_ass(
             raise ValueError(f"Invalid caption interval: {cue!r}")
         if not isinstance(text, str) or not text.strip():
             raise ValueError("Caption text cannot be empty")
+        if style not in CAPTION_STYLES:
+            raise ValueError(f"Unsupported caption style: {style!r}")
         dialogue.append(
-            f"Dialogue: 0,{ass_time(start)},{ass_time(end)},Default,,0,0,0,,{ass_text(text.strip())}"
+            f"Dialogue: 0,{ass_time(start)},{ass_time(end)},{style},,0,0,0,,{ass_text(text.strip())}"
         )
 
     return f"""[Script Info]
@@ -95,6 +102,8 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,{font},{resolved_font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,1,2,{margin_horizontal},{margin_horizontal},{margin_bottom},1
+Style: DarkOnLight,{font},{resolved_font_size},&H00000000,&H000000FF,&H00FFFFFF,&H80FFFFFF,-1,0,0,0,100,100,0,0,1,3,1,2,{margin_horizontal},{margin_horizontal},{margin_bottom},1
+Style: Boxed,{font},{resolved_font_size},&H00FFFFFF,&H000000FF,&H60000000,&H60000000,-1,0,0,0,100,100,0,0,3,8,0,2,{margin_horizontal},{margin_horizontal},{margin_bottom},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

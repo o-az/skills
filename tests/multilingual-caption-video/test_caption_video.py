@@ -28,6 +28,7 @@ from preferences import (
     load_preferences,
     save_preferences,
 )
+from style_captions import choose_style, sample_frame_indices, style_cues
 from transcribe import transcript_payload
 
 
@@ -63,8 +64,22 @@ assert "PlayResX: 1080" in ass
 assert default_font_size(1080, 1920) == 81
 assert default_font_size(1920, 1080) == 81
 assert "Style: Default,Noto Naskh Arabic UI,81," in ass
+assert "Style: DarkOnLight,Noto Naskh Arabic UI,81," in ass
+assert "Style: Boxed,Noto Naskh Arabic UI,81," in ass
 assert ",2,12,12,105,1" in ass
 assert "Dialogue: 0,0:00:01.25,0:00:03.50" in ass
+
+adaptive_ass = build_ass(
+    [
+        {
+            "start": 1.25,
+            "end": 3.5,
+            "text": "Adaptive style",
+            "style": "DarkOnLight",
+        }
+    ]
+)
+assert "Dialogue: 0,0:00:01.25,0:00:03.50,DarkOnLight" in adaptive_ass
 
 custom_ass = build_ass(
     [{"start": 1.25, "end": 3.5, "text": "Custom style"}],
@@ -74,6 +89,17 @@ custom_ass = build_ass(
 )
 assert "Style: Default,Arial,35," in custom_ass
 assert ",2,40,40,70,1" in custom_ass
+
+assert choose_style([0.05, 0.1, 0.15]) == "Default"
+assert choose_style([0.4, 0.7, 0.95]) == "DarkOnLight"
+assert choose_style([0.02, 0.5, 0.95]) == "Boxed"
+indices = sample_frame_indices(1.0, 3.0)
+assert indices == (3, 4, 5)
+styled = style_cues(
+    [{"start": 1.0, "end": 3.0, "text": "Visible"}],
+    {index: [0.5] for index in indices},
+)
+assert styled[0].get("style") == "DarkOnLight"
 
 assert validate_video_url("https://8.8.8.8/video.mp4") == (
     "https://8.8.8.8/video.mp4"

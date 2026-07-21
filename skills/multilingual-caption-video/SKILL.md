@@ -25,6 +25,7 @@ The bundled Python scripts declare their own dependencies using inline script me
 
 - `scripts/download.py` downloads one public URL using its uv-managed `yt-dlp` Python dependency and prints the final local path.
 - `scripts/transcribe.py` detects the spoken language, transcribes the video, and emits timestamped JSON.
+- `scripts/style_captions.py` samples the future subtitle band and selects a readable, stable style for each cue.
 - `scripts/make_ass.py` converts translated caption JSON into styled ASS subtitles.
 - `scripts/deliver.py` copies a verified MP4 to the operating system's Downloads directory using a safe, collision-free filename.
 - `scripts/preferences.py` reads and, only with explicit user consent, saves sparse JSON preferences.
@@ -137,13 +138,16 @@ For example, on a Fontconfig system:
 fc-match "Noto Naskh Arabic UI"
 ```
 
-Generate the subtitle file. Unless the user requested or saved an explicit size, omit `--font-size`: the script uses 7.5% of the shorter video edge, equivalent to about 7.5% of height for landscape video and 4.2% for 9:16 video. This follows BBC authoring guidance while keeping portrait captions from becoming oversized.
+Before generating the subtitle file, analyze the original video behind the future subtitle band. The analyzer makes one low-resolution pass, samples the start, midpoint, and end of every cue, and assigns one stable style to the entire cue: white text with a black outline for consistently dark areas, near-black text with a white outline for consistently bright areas, or white text on a roughly 60%-opaque black box for mixed, mid-tone, or changing areas.
 
 ```bash
-uv run "$SKILL_ROOT/scripts/make_ass.py" "$WORK_DIR/captions.json" "$WORK_DIR/captions.ass" --width <WIDTH> --height <HEIGHT> --font "<FONT>"
+uv run "$SKILL_ROOT/scripts/style_captions.py" "<SOURCE>" "$WORK_DIR/captions.json" "$WORK_DIR/styled-captions.json"
+uv run "$SKILL_ROOT/scripts/make_ass.py" "$WORK_DIR/styled-captions.json" "$WORK_DIR/captions.ass" --width <WIDTH> --height <HEIGHT> --font "<FONT>"
 ```
 
-Add `--font-size <FONT_SIZE>` only for an explicit or saved size. The default ASS region uses 12 pixels of padding on each horizontal edge, so wrapping has up to `WIDTH - 24` pixels without stretching short captions. The default bottom margin is 105 pixels, placing captions 50% higher than the previous 70-pixel baseline. Override these with `--margin-horizontal` or `--margin-bottom` only when the request or visual inspection requires it.
+Unless the user requested or saved an explicit size, omit `--font-size` from both commands: the scripts use 7.5% of the shorter video edge, equivalent to about 7.5% of height for landscape video and 4.2% for 9:16 video. This follows BBC authoring guidance while keeping portrait captions from becoming oversized. When an explicit size is resolved, pass the same `--font-size <FONT_SIZE>` to both scripts so background sampling matches the rendered subtitle band.
+
+The default ASS region uses 12 pixels of padding on each horizontal edge, so wrapping has up to `WIDTH - 24` pixels without stretching short captions. The default bottom margin is 105 pixels, placing captions 50% higher than the previous 70-pixel baseline. Override these with the same `--margin-bottom` value on both scripts, and use `--margin-horizontal` on `make_ass.py`, only when the request or visual inspection requires it.
 
 ### 7. Burn captions into a new MP4
 
@@ -170,7 +174,7 @@ ffmpeg -y -ss <SPEECH_TIMESTAMP> -i "$WORK_DIR/captioned.mp4" -frames:v 1 -vf "s
 
 Before sending each preview to an image or vision tool, check its byte size against that tool's upload limit. If the limit is unknown, keep the preview below 1 MiB. If it is too large, reduce the dimensions or JPEG quality, then check again; never invoke the inspection tool with a known-oversized image.
 
-Confirm that captions are present, correctly shaped, legible, inside the safe area, and no more than two lines; video and audio both play; duration and dimensions match the source; and the source remains unchanged. Fix the caption data or style and render again when verification fails.
+Confirm that captions are present, correctly shaped, legible, inside the safe area, and no more than two lines; adaptive text or background colors remain readable without flickering within a cue; video and audio both play; duration and dimensions match the source; and the source remains unchanged. Fix the caption data or style and render again when verification fails.
 
 ### 9. Deliver the requested form
 
