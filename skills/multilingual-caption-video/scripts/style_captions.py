@@ -1,13 +1,19 @@
-#!/usr/bin/env -S uv run
+#!/usr/bin/env -S uv run --script
+
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 
 import argparse
 import json
 import math
 import subprocess
+import tempfile
 from pathlib import Path
-from typing import BinaryIO, TypedDict, cast
+from typing import BinaryIO, cast
 
-from make_ass import CaptionCue, default_font_size
+from make_ass import CaptionCue, default_font_size, probe_display_dimensions
 
 SAMPLE_FPS = 2
 SAMPLE_WIDTH = 64
@@ -16,44 +22,16 @@ WHITE_CONTRAST_MAX_LUMINANCE = 0.183
 BLACK_TEXT_MIN_LUMINANCE = 0.35
 
 
-class VideoDimensions(TypedDict):
-    width: int
-    height: int
-
-
-def probe_dimensions(video: Path) -> VideoDimensions:
-    result = subprocess.run(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=width,height",
-            "-of",
-            "json",
-            str(video),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    payload = json.loads(result.stdout)
-    streams = payload.get("streams", [])
-    if not streams:
-        raise ValueError("Video has no video stream")
-    width, height = streams[0].get("width"), streams[0].get("height")
-    if not isinstance(width, int) or not isinstance(height, int):
-        raise ValueError("Video dimensions are unavailable")
-    if width <= 0 or height <= 0:
-        raise ValueError("Video dimensions must be positive")
-    return {"width": width, "height": height}
-
-
 def sample_frame_indices(start: float, end: float) -> tuple[int, ...]:
-    if not math.isfinite(start) or not math.isfinite(end) or end <= start:
-        raise ValueError("Caption interval must be finite and increasing")
+    if (
+        not math.isfinite(start)
+        or not math.isfinite(end)
+        or start < 0
+        or end <= start
+    ):
+        raise ValueError(
+            "Caption interval must be non-negative, finite, and increasing"
+        )
     inset = min(0.5, (end - start) * 0.2)
     times = (start + inset, (start + end) / 2, end - inset)
     return tuple(
@@ -121,48 +99,68 @@ def sampled_luminances(
         f"scale={SAMPLE_WIDTH}:{SAMPLE_HEIGHT}:flags=area,"
         f"fps={SAMPLE_FPS}:start_time=0:round=near,format=rgb24"
     )
-    process = subprocess.Popen(
-        [
-            "ffmpeg",
-            "-v",
-            "error",
-            "-i",
-            str(video),
-            "-vf",
-            video_filter,
-            "-an",
-            "-sn",
-            "-f",
-            "rawvideo",
-            "pipe:1",
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if process.stdout is None or process.stderr is None:
-        process.kill()
-        raise RuntimeError("Could not open ffmpeg output pipes")
-
-    frame_size = SAMPLE_WIDTH * SAMPLE_HEIGHT * 3
-    samples: dict[int, list[float]] = {}
-    frame_index = 0
-    stdout = cast(BinaryIO, process.stdout)
-    while frame := read_exact(stdout, frame_size):
-        if len(frame) != frame_size:
+    with tempfile.TemporaryFile() as error_file:
+        process = subprocess.Popen(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-i",
+                str(video),
+                "-vf",
+                video_filter,
+                "-an",
+                "-sn",
+                "-f",
+                "rawvideo",
+                "pipe:1",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=error_file,
+        )
+        if process.stdout is None:
             process.kill()
-            raise RuntimeError("ffmpeg returned an incomplete RGB frame")
-        if frame_index in required_indices:
-            samples[frame_index] = relative_luminances(frame)
-        frame_index += 1
+            process.wait()
+            raise RuntimeError("Could not open ffmpeg output pipe")
 
-    error = process.stderr.read().decode(errors="replace").strip()
-    if process.wait() != 0:
+        frame_size = SAMPLE_WIDTH * SAMPLE_HEIGHT * 3
+        samples: dict[int, list[float]] = {}
+        frame_index = 0
+        last_frame: bytes | None = None
+        stdout = cast(BinaryIO, process.stdout)
+        try:
+            while frame := read_exact(stdout, frame_size):
+                if len(frame) != frame_size:
+                    raise RuntimeError(
+                        "ffmpeg returned an incomplete RGB frame"
+                    )
+                last_frame = frame
+                if frame_index in required_indices:
+                    samples[frame_index] = relative_luminances(frame)
+                frame_index += 1
+        except BaseException:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+            raise
+
+        return_code = process.wait()
+        error_file.seek(0)
+        error = error_file.read().decode(errors="replace").strip()
+    if return_code != 0:
         raise RuntimeError(error or "ffmpeg caption-background analysis failed")
+    if last_frame is None:
+        raise RuntimeError("ffmpeg returned no RGB frames")
     missing = required_indices - samples.keys()
     if missing:
-        raise RuntimeError(
-            "Video ended before all caption backgrounds were sampled"
-        )
+        last_frame_index = frame_index - 1
+        if any(index < last_frame_index for index in missing):
+            raise RuntimeError(
+                "ffmpeg omitted a required caption-background frame"
+            )
+        last_luminances = relative_luminances(last_frame)
+        for index in missing:
+            samples[index] = last_luminances
     return samples
 
 
@@ -200,10 +198,14 @@ def main() -> None:
     cues = parsed if isinstance(parsed, list) else parsed["cues"]
     if not cues:
         raise ValueError("At least one caption cue is required")
-    dimensions = probe_dimensions(video)
-    font_size = args.font_size or default_font_size(
-        dimensions["width"], dimensions["height"]
+    dimensions = probe_display_dimensions(video)
+    font_size = (
+        default_font_size(dimensions["width"], dimensions["height"])
+        if args.font_size is None
+        else args.font_size
     )
+    if font_size <= 0 or args.margin_bottom <= 0:
+        raise ValueError("Font size and bottom margin must be positive")
     indices = {
         index
         for cue in cues

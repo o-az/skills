@@ -1,8 +1,14 @@
-#!/usr/bin/env -S uv run
+#!/usr/bin/env -S uv run --script
+
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 
 import argparse
 import json
 import math
+import subprocess
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
@@ -15,6 +21,58 @@ class CaptionCue(TypedDict):
     end: float
     text: str
     style: NotRequired[str]
+
+
+class VideoDimensions(TypedDict):
+    width: int
+    height: int
+
+
+def probe_display_dimensions(video: Path) -> VideoDimensions:
+    video = video.resolve(strict=True)
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height:stream_side_data=rotation",
+            "-of",
+            "json",
+            str(video),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    payload = json.loads(result.stdout)
+    streams = payload.get("streams", [])
+    if not streams:
+        raise ValueError("Video has no video stream")
+    stream = streams[0]
+    width, height = stream.get("width"), stream.get("height")
+    if not isinstance(width, int) or not isinstance(height, int):
+        raise ValueError("Video dimensions are unavailable")
+    if width <= 0 or height <= 0:
+        raise ValueError("Video dimensions must be positive")
+
+    rotation = 0
+    for side_data in stream.get("side_data_list", []):
+        candidate = side_data.get("rotation")
+        if (
+            isinstance(candidate, (int, float))
+            and not isinstance(candidate, bool)
+            and math.isfinite(candidate)
+        ):
+            rotation = round(candidate) % 360
+            break
+    if rotation not in {0, 90, 180, 270}:
+        raise ValueError(f"Unsupported video rotation: {rotation} degrees")
+    if rotation in {90, 270}:
+        width, height = height, width
+    return {"width": width, "height": height}
 
 
 def ass_time(seconds: float) -> str:
@@ -81,6 +139,7 @@ def build_ass(
             or isinstance(end, bool)
             or not math.isfinite(start)
             or not math.isfinite(end)
+            or start < 0
             or end <= start
         ):
             raise ValueError(f"Invalid caption interval: {cue!r}")
@@ -117,21 +176,34 @@ def main() -> None:
     )
     parser.add_argument("input", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--width", type=int, default=1920)
-    parser.add_argument("--height", type=int, default=1080)
+    parser.add_argument("--video", type=Path)
+    parser.add_argument("--width", type=int)
+    parser.add_argument("--height", type=int)
     parser.add_argument("--font", default="Arial")
     parser.add_argument("--font-size", type=int)
     parser.add_argument("--margin-bottom", type=int, default=105)
     parser.add_argument("--margin-horizontal", type=int, default=12)
     args = parser.parse_args()
 
+    if args.video is not None:
+        if args.width is not None or args.height is not None:
+            parser.error("--video cannot be combined with --width or --height")
+        dimensions = probe_display_dimensions(args.video)
+    elif (args.width is None) != (args.height is None):
+        parser.error("--width and --height must be provided together")
+    else:
+        dimensions = {
+            "width": 1920 if args.width is None else args.width,
+            "height": 1080 if args.height is None else args.height,
+        }
+
     parsed = json.loads(args.input.read_text(encoding="utf-8"))
     cues = parsed if isinstance(parsed, list) else parsed["cues"]
     args.output.write_text(
         build_ass(
             cues,
-            width=args.width,
-            height=args.height,
+            width=dimensions["width"],
+            height=dimensions["height"],
             font=args.font,
             font_size=args.font_size,
             margin_bottom=args.margin_bottom,

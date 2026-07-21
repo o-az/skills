@@ -1,4 +1,9 @@
-#!/usr/bin/env -S uv run
+#!/usr/bin/env -S uv run --script
+
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 
 import argparse
 import os
@@ -21,9 +26,15 @@ def default_downloads_directory() -> Path:
             r"Software\Microsoft\Windows\CurrentVersion\Explorer"
             r"\User Shell Folders"
         )
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
-            value, _ = winreg.QueryValueEx(key, WINDOWS_DOWNLOADS_ID)
-        return Path(os.path.expandvars(value)).expanduser()
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+                value, _ = winreg.QueryValueEx(key, WINDOWS_DOWNLOADS_ID)
+            downloads = Path(os.path.expandvars(value)).expanduser()
+            if downloads.is_absolute():
+                return downloads
+        except OSError, TypeError:
+            pass
+        return Path.home() / "Desktop"
 
     if sys.platform.startswith("linux"):
         config_home = Path(

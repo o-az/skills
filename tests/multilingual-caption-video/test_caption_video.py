@@ -1,5 +1,11 @@
-#!/usr/bin/env -S uv run
+#!/usr/bin/env -S uv run --script
 
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
+
+import io
 import json
 import os
 import subprocess
@@ -7,8 +13,11 @@ import sys
 import tempfile
 import time
 from datetime import date
+from http.client import HTTPMessage
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+from urllib.request import Request
 
 SCRIPTS = (
     Path(__file__).parents[2]
@@ -20,15 +29,36 @@ sys.path.insert(0, str(SCRIPTS))
 sys.dont_write_bytecode = True
 
 from cleanup import create_workdir, keep_workdir, schedule_cleanup
-from deliver import deliver_video, normalized_language_code, sanitize_stem
-from download import download_options, validate_video_url
-from make_ass import build_ass, default_font_size
+from deliver import (
+    default_downloads_directory,
+    deliver_video,
+    normalized_language_code,
+    sanitize_stem,
+)
+from download import (
+    LiveStreamFilter,
+    PublicRedirectHandler,
+    direct_video_stem,
+    direct_video_suffix,
+    download_options,
+    download_video,
+    reject_live_video,
+    validate_video_url,
+)
+from make_ass import build_ass, default_font_size, probe_display_dimensions
 from preferences import (
     default_preferences_path,
     load_preferences,
     save_preferences,
 )
-from style_captions import choose_style, sample_frame_indices, style_cues
+from style_captions import (
+    SAMPLE_HEIGHT,
+    SAMPLE_WIDTH,
+    choose_style,
+    sample_frame_indices,
+    sampled_luminances,
+    style_cues,
+)
 from transcribe import transcript_payload
 
 
@@ -38,6 +68,12 @@ class Segment:
         self.end = end
         self.text = text
 
+
+for script in SCRIPTS.glob("*.py"):
+    source = script.read_text(encoding="utf-8")
+    assert source.startswith("#!/usr/bin/env -S uv run --script\n")
+    assert '# requires-python = ">=3.12"' in source
+    assert "# dependencies = [" in source
 
 payload = transcript_payload(
     [Segment(0, 1.25, " Hello "), Segment(1.25, 2.5, " world ")],
@@ -53,6 +89,17 @@ except ValueError as error:
     assert str(error) == "No speech detected"
 else:
     raise AssertionError("Empty transcription should fail")
+
+try:
+    transcript_payload(
+        [Segment(-0.1, 0.5, "Invalid")],
+        language="en",
+        language_probability=1,
+    )
+except ValueError:
+    pass
+else:
+    raise AssertionError("Negative transcription timestamps should fail")
 
 ass = build_ass(
     [{"start": 1.25, "end": 3.5, "text": "مرحباً، يا عالم"}],
@@ -90,6 +137,13 @@ custom_ass = build_ass(
 assert "Style: Default,Arial,35," in custom_ass
 assert ",2,40,40,70,1" in custom_ass
 
+try:
+    build_ass([{"start": -0.1, "end": 1, "text": "Invalid"}])
+except ValueError:
+    pass
+else:
+    raise AssertionError("Negative ASS timestamps should fail")
+
 assert choose_style([0.05, 0.1, 0.15]) == "Default"
 assert choose_style([0.4, 0.7, 0.95]) == "DarkOnLight"
 assert choose_style([0.02, 0.5, 0.95]) == "Boxed"
@@ -100,6 +154,75 @@ styled = style_cues(
     {index: [0.5] for index in indices},
 )
 assert styled[0].get("style") == "DarkOnLight"
+
+try:
+    sample_frame_indices(-0.1, 1)
+except ValueError:
+    pass
+else:
+    raise AssertionError("Negative style-sampling timestamps should fail")
+
+with tempfile.TemporaryDirectory() as temporary_directory:
+    rotated_video = Path(temporary_directory) / "rotated.mp4"
+    rotated_video.touch()
+    probe_result = subprocess.CompletedProcess(
+        args=[],
+        returncode=0,
+        stdout=json.dumps(
+            {
+                "streams": [
+                    {
+                        "width": 320,
+                        "height": 180,
+                        "side_data_list": [{"rotation": 90}],
+                    }
+                ]
+            }
+        ),
+    )
+    with patch("make_ass.subprocess.run", return_value=probe_result):
+        assert probe_display_dimensions(rotated_video) == {
+            "width": 180,
+            "height": 320,
+        }
+
+
+class FakeFfmpegProcess:
+    def __init__(self, frames: bytes) -> None:
+        self.stdout = io.BytesIO(frames)
+        self.returncode: int | None = None
+
+    def poll(self) -> int | None:
+        return self.returncode
+
+    def wait(self) -> int:
+        self.returncode = 0
+        return self.returncode
+
+    def kill(self) -> None:
+        self.returncode = -9
+
+
+frame_size = SAMPLE_WIDTH * SAMPLE_HEIGHT * 3
+fake_process = FakeFfmpegProcess(bytes([255]) * frame_size * 4)
+
+
+def fake_popen(*args: object, **kwargs: object) -> FakeFfmpegProcess:
+    del args
+    assert kwargs["stderr"] != subprocess.PIPE
+    return fake_process
+
+
+with patch("style_captions.subprocess.Popen", side_effect=fake_popen):
+    end_samples = sampled_luminances(
+        Path("video.mp4"),
+        {3, 4},
+        width=320,
+        height=180,
+        font_size=16,
+        margin_bottom=20,
+    )
+assert end_samples[4] == end_samples[3]
 
 assert validate_video_url("https://8.8.8.8/video.mp4") == (
     "https://8.8.8.8/video.mp4"
@@ -126,6 +249,67 @@ assert options["outtmpl"] == {
 }
 assert options["windowsfilenames"] is True
 
+assert direct_video_suffix("https://example.com/Video.MP4?token=1") == ".mp4"
+assert direct_video_suffix("https://example.com/watch/123") is None
+assert direct_video_stem("https://example.com/My%20Video%3F.mp4") == "My-Video"
+
+live_filter = LiveStreamFilter()
+live_options = download_options(download_workdir, live_filter)
+assert live_options["match_filter"] is live_filter
+assert reject_live_video({"is_live": True}) == "Live streams are not supported"
+assert reject_live_video({"live_status": "is_upcoming"}) == (
+    "Live streams are not supported"
+)
+assert reject_live_video({"live_status": "was_live"}) is None
+
+try:
+    PublicRedirectHandler().redirect_request(
+        Request("https://8.8.8.8/video.mp4"),
+        io.BytesIO(),
+        302,
+        "Found",
+        HTTPMessage(),
+        "http://127.0.0.1/internal.mp4",
+    )
+except ValueError:
+    pass
+else:
+    raise AssertionError(
+        "A direct-video redirect to a private host should fail"
+    )
+
+with tempfile.TemporaryDirectory() as temporary_directory:
+    dispatch_workdir = create_workdir(Path(temporary_directory))
+    direct_result = dispatch_workdir / "video.mp4"
+    with (
+        patch("download.validate_video_url", side_effect=lambda url: url),
+        patch(
+            "download.download_direct_video", return_value=direct_result
+        ) as direct_download,
+        patch("download.download_platform_video") as platform_download,
+    ):
+        assert (
+            download_video("https://example.com/video.mp4", dispatch_workdir)
+            == direct_result
+        )
+        direct_download.assert_called_once()
+        platform_download.assert_not_called()
+
+    platform_result = dispatch_workdir / "platform.mp4"
+    with (
+        patch("download.validate_video_url", side_effect=lambda url: url),
+        patch("download.download_direct_video") as direct_download,
+        patch(
+            "download.download_platform_video", return_value=platform_result
+        ) as platform_download,
+    ):
+        assert (
+            download_video("https://example.com/watch/123", dispatch_workdir)
+            == platform_result
+        )
+        direct_download.assert_not_called()
+        platform_download.assert_called_once()
+
 assert sanitize_stem("/tmp/My unsafe: video?.mov") == "My-unsafe-video"
 assert sanitize_stem(r"C:\Videos\قصيدة جميلة.mp4") == "قصيدة-جميلة"
 assert normalized_language_code("EN_us") == "en-us"
@@ -135,6 +319,18 @@ except ValueError:
     pass
 else:
     raise AssertionError("A language name should not be accepted as a code")
+
+fake_winreg = SimpleNamespace(
+    HKEY_CURRENT_USER=object(),
+    OpenKey=MagicMock(side_effect=OSError("Downloads folder unavailable")),
+    QueryValueEx=MagicMock(),
+)
+with (
+    patch("deliver.sys.platform", "win32"),
+    patch.dict(sys.modules, {"winreg": fake_winreg}),
+    patch("deliver.Path.home", return_value=Path("/Users/example")),
+):
+    assert default_downloads_directory() == Path("/Users/example/Desktop")
 
 with tempfile.TemporaryDirectory() as temporary_directory:
     delivery_directory = Path(temporary_directory)

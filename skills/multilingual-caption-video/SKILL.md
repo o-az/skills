@@ -19,12 +19,12 @@ Transcribe the video's spoken language, translate the timestamped transcript int
 - A platform upload capability or `curl` only when URL delivery is requested
 - Network access for the transcription model, URL downloads, and uploads
 
-The bundled Python scripts declare their own dependencies using inline script metadata. `uv run --script` resolves them automatically; no global `yt-dlp` or `faster-whisper` installation is required. The transcription helper uses `faster-whisper==1.2.1` with the multilingual Whisper `base` model and downloads the model into the normal Hugging Face cache on first use.
+Every bundled Python entrypoint has PEP 723 inline script metadata, requires Python 3.12 or newer, and must be invoked with `uv run --script`. Scripts that use only the standard library declare `dependencies = []`; the download and transcription scripts pin their third-party dependencies. `uv run --script` selects a compatible Python interpreter and creates an isolated cached environment without using or modifying the caller's Python project. No global `yt-dlp` or `faster-whisper` installation is required. The transcription helper uses `faster-whisper==1.2.1` with the multilingual Whisper `base` model and downloads the model into the normal Hugging Face cache on first use.
 
 ## Bundled scripts
 
 - `scripts/check_requirements.sh` checks required commands, FFmpeg capabilities, and available package managers without installing anything.
-- `scripts/download.py` downloads one public URL using its uv-managed `yt-dlp` Python dependency and prints the final local path.
+- `scripts/download.py` streams direct `.mp4` and `.mov` URLs itself, delegates platform webpage URLs to its uv-managed `yt-dlp` dependency, rejects live streams reported by yt-dlp, and prints the final local path.
 - `scripts/transcribe.py` detects the spoken language, transcribes the video, and emits timestamped JSON.
 - `scripts/style_captions.py` samples the future subtitle band and selects a readable, stable style for each cue.
 - `scripts/make_ass.py` converts translated caption JSON into styled ASS subtitles.
@@ -32,12 +32,13 @@ The bundled Python scripts declare their own dependencies using inline script me
 - `scripts/preferences.py` reads and, only with explicit user consent, saves sparse JSON preferences.
 - `scripts/cleanup.py` creates marked work directories and safely schedules or cancels their deletion.
 
-Run any script with `uv run <script> --help` for its interface.
+Run any Python script with `uv run --script <script> --help` so uv honors its declared interpreter and isolated dependencies.
 
 ## Rules
 
 - Accept either an explicit local video path or an explicit `http://` or `https://` video URL.
-- Reject URL targets that resolve to loopback, private, link-local, or cloud-metadata addresses.
+- Reject explicit URL inputs whose initial host resolves to loopback, private, link-local, or cloud-metadata addresses. Apply the same check to redirects while downloading direct `.mp4` or `.mov` URLs. For platform webpage URLs, validate the initial page URL and then delegate extractor-controlled requests to yt-dlp on a best-effort basis; platform support is not guaranteed.
+- Reject live-stream webpage entries reported by yt-dlp.
 - Never overwrite or delete the source video.
 - Do not attach cookies, credentials, or authentication headers when downloading a URL unless the user explicitly requests it.
 - Preserve meaning and timing. Do not summarize, censor, embellish, or invent speech.
@@ -85,7 +86,7 @@ Do not start installation or the caption workflow until the user explicitly sele
 Resolve the directory containing this `SKILL.md` as `SKILL_ROOT`, then inspect saved preferences:
 
 ```bash
-uv run "$SKILL_ROOT/scripts/preferences.py" show
+uv run --script "$SKILL_ROOT/scripts/preferences.py" show
 ```
 
 Preferences live at `$XDG_CONFIG_HOME/multilingual-caption-video/preferences.json` when `XDG_CONFIG_HOME` is an absolute path, or `~/.config/multilingual-caption-video/preferences.json` otherwise. The file may contain `delivery`, `language`, `font`, and `font_size`.
@@ -95,7 +96,7 @@ Resolve each setting in this order: the current request, a saved preference, the
 Ask whether the user wants the resolved choices saved for future jobs. Save only the fields the user explicitly consents to persist:
 
 ```bash
-uv run "$SKILL_ROOT/scripts/preferences.py" set --delivery file --language Arabic --font-size 35
+uv run --script "$SKILL_ROOT/scripts/preferences.py" set --delivery file --language Arabic --font-size 35
 ```
 
 If the user declines, do not write the preferences file. Ask again on future jobs whenever a required choice is absent.
@@ -103,7 +104,7 @@ If the user declines, do not write the preferences file. Ask again on future job
 ### 2. Create an isolated work directory
 
 ```bash
-WORK_DIR="$(uv run "$SKILL_ROOT/scripts/cleanup.py" create)"
+WORK_DIR="$(uv run --script "$SKILL_ROOT/scripts/cleanup.py" create)"
 ```
 
 Keep all downloaded and generated assets inside this directory. Keep the source outside it when the user supplied a local file.
@@ -116,10 +117,10 @@ For a local file, resolve its absolute path and verify it is a regular video fil
 SOURCE="$(uv run --script "$SKILL_ROOT/scripts/download.py" "<VIDEO_URL>" "$WORK_DIR")"
 ```
 
-The downloader rejects credentials and hosts resolving to non-public addresses, disables playlists, writes only inside the marked work directory, and reports the final path after yt-dlp post-processing. Its safe filename retains yt-dlp's title and media ID so file delivery can derive a meaningful original stem. Probe the source:
+For URLs whose path ends in `.mp4` or `.mov`, the downloader streams the response directly and validates each redirect host. For other URLs, it validates the initial page host and delegates to yt-dlp with playlists and live streams disabled. Platform extraction is best-effort and may fail when a site is unsupported, requires authentication, or changes its interface. Both paths write only inside the marked work directory and report the final local path. Platform downloads retain yt-dlp's title and media ID so file delivery can derive a meaningful original stem. Probe the source:
 
 ```bash
-ffprobe -v error -show_entries format=duration -show_entries stream=codec_type,codec_name,width,height -of json "<SOURCE>"
+ffprobe -v error -show_entries format=duration:stream=codec_type,codec_name,width,height:stream_side_data=rotation -of json "<SOURCE>"
 ```
 
 Stop with a clear error when the source has no video stream or no audio stream.
@@ -127,7 +128,7 @@ Stop with a clear error when the source has no video stream or no audio stream.
 ### 4. Detect the source language and transcribe
 
 ```bash
-uv run "$SKILL_ROOT/scripts/transcribe.py" "<SOURCE>" "$WORK_DIR/transcript.json"
+uv run --script "$SKILL_ROOT/scripts/transcribe.py" "<SOURCE>" "$WORK_DIR/transcript.json"
 ```
 
 Omit `--language` to detect the spoken language. When the source language is known, pass its ISO code, for example `--language es`. Stop with a clear error when transcription returns no speech cues.
@@ -151,7 +152,7 @@ Keep names, numbers, tone, and meaning accurate. When the source already uses th
 
 ### 6. Generate ASS subtitles
 
-Read the video width and height from `ffprobe`. Select a font already installed on the system that covers the target language's script. Honor an explicit or saved font when it is installed and compatible; otherwise choose a suitable installed font without asking the user to install one or approve the fallback.
+Select a font already installed on the system that covers the target language's script. Honor an explicit or saved font when it is installed and compatible; otherwise choose a suitable installed font without asking the user to install one or approve the fallback. The bundled scripts probe the video's display rotation and use the same autorotated dimensions that FFmpeg will render.
 
 Inspect fonts using the operating system's available facilities instead of assuming `fc-match` exists:
 
@@ -170,8 +171,8 @@ fc-match "Noto Naskh Arabic UI"
 Before generating the subtitle file, analyze the original video behind the future subtitle band. The analyzer makes one low-resolution pass, samples the start, midpoint, and end of every cue, and assigns one stable style to the entire cue: white text with a black outline for consistently dark areas, near-black text with a white outline for consistently bright areas, or white text on a roughly 60%-opaque black box for mixed, mid-tone, or changing areas.
 
 ```bash
-uv run "$SKILL_ROOT/scripts/style_captions.py" "<SOURCE>" "$WORK_DIR/captions.json" "$WORK_DIR/styled-captions.json"
-uv run "$SKILL_ROOT/scripts/make_ass.py" "$WORK_DIR/styled-captions.json" "$WORK_DIR/captions.ass" --width <WIDTH> --height <HEIGHT> --font "<FONT>"
+uv run --script "$SKILL_ROOT/scripts/style_captions.py" "<SOURCE>" "$WORK_DIR/captions.json" "$WORK_DIR/styled-captions.json"
+uv run --script "$SKILL_ROOT/scripts/make_ass.py" "$WORK_DIR/styled-captions.json" "$WORK_DIR/captions.ass" --video "<SOURCE>" --font "<FONT>"
 ```
 
 Unless the user requested or saved an explicit size, omit `--font-size` from both commands: the scripts use 7.5% of the shorter video edge, equivalent to about 7.5% of height for landscape video and 4.2% for 9:16 video. This follows BBC authoring guidance while keeping portrait captions from becoming oversized. When an explicit size is resolved, pass the same `--font-size <FONT_SIZE>` to both scripts so background sampling matches the rendered subtitle band.
@@ -189,11 +190,13 @@ ffmpeg -y -i "<SOURCE>" -vf "ass=captions.ass" -c:v libx264 -crf 18 -preset medi
 
 ### 8. Verify visually and structurally
 
-Probe the result and compare its duration and dimensions with the source:
+Probe the result and compare its duration and displayed dimensions with the source:
 
 ```bash
-ffprobe -v error -show_entries format=duration -show_entries stream=codec_type,codec_name,width,height -of json "$WORK_DIR/captioned.mp4"
+ffprobe -v error -show_entries format=duration:stream=codec_type,codec_name,width,height:stream_side_data=rotation -of json "$WORK_DIR/captioned.mp4"
 ```
+
+Account for display rotation when comparing dimensions. FFmpeg normally autorotates and normalizes a rotated input while rendering, so a source stored as `1920x1080` with a 90-degree display matrix correctly becomes a `1080x1920` output without that matrix. Treat those as matching displayed dimensions.
 
 Extract at least one frame during speech and inspect it with an available image or vision tool:
 
@@ -203,17 +206,17 @@ ffmpeg -y -ss <SPEECH_TIMESTAMP> -i "$WORK_DIR/captioned.mp4" -frames:v 1 -vf "s
 
 Before sending each preview to an image or vision tool, check its byte size against that tool's upload limit. If the limit is unknown, keep the preview below 1 MiB. If it is too large, reduce the dimensions or JPEG quality, then check again; never invoke the inspection tool with a known-oversized image.
 
-Confirm that captions are present, correctly shaped, legible, inside the safe area, and no more than two lines; adaptive text or background colors remain readable without flickering within a cue; video and audio both play; duration and dimensions match the source; and the source remains unchanged. Fix the caption data or style and render again when verification fails.
+Confirm that captions are present, correctly shaped, legible, inside the safe area, and no more than two lines; adaptive text or background colors remain readable without flickering within a cue; video and audio both play; duration and displayed dimensions match the source; and the source remains unchanged. Fix the caption data or style and render again when verification fails.
 
 ### 9. Deliver the requested form
 
 For `file`, copy the verified MP4 to the operating system's Downloads directory, then deliver that permanent file without uploading it. Pass the local source's original path or the downloaded source's yt-dlp-derived path as `<ORIGINAL_NAME>`, and use the target language's lowercase ISO or BCP 47 code for `<LANGUAGE_CODE>`:
 
 ```bash
-DELIVERED="$(uv run "$SKILL_ROOT/scripts/deliver.py" "$WORK_DIR/captioned.mp4" "<ORIGINAL_NAME>" "<LANGUAGE_CODE>")"
+DELIVERED="$(uv run --script "$SKILL_ROOT/scripts/deliver.py" "$WORK_DIR/captioned.mp4" "<ORIGINAL_NAME>" "<LANGUAGE_CODE>")"
 ```
 
-The resulting name is `YYYYMMDD-<original-stem>-<language-code>-subtitles.mp4`. The script sanitizes the original stem and uses `-2`, `-3`, and so on when a name already exists; it never overwrites another file. It uses the Windows Downloads known folder, the configured XDG Downloads directory on Linux when available, and `~/Downloads` otherwise. If that directory cannot be created or written, report the issue and fall back to the platform's normal file-delivery or attachment capability from the work directory.
+The resulting name is `YYYYMMDD-<original-stem>-<language-code>-subtitles.mp4`. The script sanitizes the original stem and uses `-2`, `-3`, and so on when a name already exists; it never overwrites another file. It uses the Windows Downloads known folder with the Desktop as its Windows fallback, the configured XDG Downloads directory on Linux when available, and `~/Downloads` otherwise. If that directory cannot be created or written, report the issue and fall back to the platform's normal file-delivery or attachment capability from the work directory.
 
 For `url`, upload the generated MP4 to the configured video-capable host. When no uploader is configured, use `pstbn.dev`:
 
@@ -230,13 +233,13 @@ In the successful result, tell the user: “I used font <FONT>, which was availa
 Only after successful delivery, tell the user: “I will clean up the working files and delete the temporary local assets five minutes from now. The delivered file in Downloads will remain. Let me know before then if you want me to keep the working files.” Then schedule cleanup:
 
 ```bash
-uv run "$SKILL_ROOT/scripts/cleanup.py" schedule "$WORK_DIR" --delay 300
+uv run --script "$SKILL_ROOT/scripts/cleanup.py" schedule "$WORK_DIR" --delay 300
 ```
 
 If the user asks to retain the assets before deletion, cancel cleanup by creating the keep marker:
 
 ```bash
-uv run "$SKILL_ROOT/scripts/cleanup.py" keep "$WORK_DIR"
+uv run --script "$SKILL_ROOT/scripts/cleanup.py" keep "$WORK_DIR"
 ```
 
 On failure, retain the working directory only long enough to report or diagnose the error, then safely delete it with the cleanup helper. Never apply cleanup to the user's source file or an unmarked directory.
