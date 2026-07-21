@@ -37,6 +37,21 @@
         "Reports the selected font and offers font, size, or subtitle-style changes",
         "Deletes only the marked generated work directory after the cleanup grace period while retaining the delivered Downloads file"
       ]
+    },
+    {
+      "id": "missing-runtime-requirements",
+      "prompt": "Add English subtitles to /tmp/interview.mp4 and send me the file. The environment has neither uv nor a usable FFmpeg installation, but Nix and Homebrew are available.",
+      "expected_output": "The agent stops before processing, identifies uv and FFmpeg as missing, offers temporary and persistent setup choices, and waits for explicit approval.",
+      "assertions": [
+        "Runs the shell-based requirement preflight before preferences, downloads, transcription, or work-directory creation",
+        "Describes the missing requirements as uv and FFmpeg with libass and libx264 support without unnecessarily mentioning FFmpeg companion executables",
+        "Offers a temporary Nix environment and explains that it is scoped to this job even though packages may remain cached",
+        "Offers an available persistent setup and explains that it is a one-time installation reusable by future skill runs",
+        "States that provisioning may download packages and asks the user to select and approve an option before proceeding",
+        "Provides the official uv and FFmpeg installation pages for self-installation",
+        "Does not install packages, mutate package-manager configuration, or begin caption processing before explicit approval",
+        "Reruns the capability preflight after any approved provisioning and refuses to continue if libass or libx264 remains unavailable"
+      ]
     }
   ]
 }

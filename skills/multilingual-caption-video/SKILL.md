@@ -2,7 +2,7 @@
 name: multilingual-caption-video
 description: "Burn translated captions into a local video or video URL and deliver the finished MP4 as a file or shareable link. Use when a user asks to subtitle, caption, translate, or hardcode subtitles into a video in a specified language."
 license: "GPL-3.0-or-Later"
-compatibility: Requires uv and ffmpeg/ffprobe with libass and H.264 support. URL delivery requires a platform uploader or curl.
+compatibility: Requires uv and FFmpeg with libass and libx264 support. URL delivery requires a platform uploader or curl.
 metadata:
   author: o-az
   version: "1.1.1"
@@ -15,7 +15,7 @@ Transcribe the video's spoken language, translate the timestamped transcript int
 ## Requirements
 
 - `uv`
-- `ffmpeg` and `ffprobe` with libass and H.264 support
+- FFmpeg with libass and libx264 support
 - A platform upload capability or `curl` only when URL delivery is requested
 - Network access for the transcription model, URL downloads, and uploads
 
@@ -23,6 +23,7 @@ The bundled Python scripts declare their own dependencies using inline script me
 
 ## Bundled scripts
 
+- `scripts/check_requirements.sh` checks required commands, FFmpeg capabilities, and available package managers without installing anything.
 - `scripts/download.py` downloads one public URL using its uv-managed `yt-dlp` Python dependency and prints the final local path.
 - `scripts/transcribe.py` detects the spoken language, transcribes the video, and emits timestamped JSON.
 - `scripts/style_captions.py` samples the future subtitle band and selects a readable, stable style for each cue.
@@ -47,9 +48,37 @@ Run any script with `uv run <script> --help` for its interface.
 - Write preferences only after explicit consent. An explicit request always overrides a saved preference for that job.
 - Delete only marked working directories created by `scripts/cleanup.py`.
 - Run bundled scripts as the current unprivileged user. Never invoke them through `sudo` or another privilege-elevation mechanism.
+- Never download, install, activate globally, or modify package-manager configuration without the user's explicit approval.
 - Once all required choices are resolved, tell the user: “I will start the process now end to end and ping you once I'm fully done. If you would like me to update you continuously after each step, let me know—otherwise I'll ping you once done or if I come across any issues.” Do not send routine progress updates unless the user opts in; always report failures, blockers, or required decisions promptly.
 
 ## Workflow
+
+### 0. Check runtime requirements
+
+Before resolving preferences or creating a work directory, run the dependency preflight directly with the system shell so it still works when `uv` is absent:
+
+```bash
+sh "$SKILL_ROOT/scripts/check_requirements.sh"
+```
+
+Proceed only when `uv`, `ffmpeg`, `libass`, and `libx264` are all `true`. Treat an unavailable bundled FFmpeg probe as an unavailable FFmpeg installation, but describe the requirement to the user simply as FFmpeg. Do not mention internal companion executables unless the user asks for diagnostics.
+
+If anything is unavailable, stop before processing the video and clearly name the missing requirements. Use the preflight's `nix`, `mise`, and `homebrew` fields to offer only choices that are actually available:
+
+- **Temporary for this job:** use `nix shell nixpkgs#uv nixpkgs#ffmpeg-full --command ...` or `mise exec uv@latest ffmpeg@latest -- ...`. This does not make the tools globally available, although downloaded packages may remain cached.
+- **One-time persistent setup:** with explicit approval, use `nix profile install nixpkgs#uv nixpkgs#ffmpeg-full`, `mise use --global uv@latest ffmpeg@latest`, or Homebrew's `uv` and `ffmpeg-full` formulae. Homebrew's `ffmpeg-full` is keg-only, so expose `$(brew --prefix ffmpeg-full)/bin` when validating and running the workflow. Explain that a persistent setup is a one-time installation and future skill runs can reuse it, subject to the selected package manager being activated normally.
+
+The ordinary Homebrew `ffmpeg` formula is not an acceptable substitute unless the post-install preflight proves that it includes both required capabilities. Regardless of provider or persistence, rerun the preflight inside the selected environment after provisioning. If it still fails, report the failed capability and do not continue or silently switch providers.
+
+Ask for consent using natural wording based on the detected state, following this model:
+
+> This skill requires uv and FFmpeg with libass and libx264 support. The following requirements are unavailable: <MISSING_REQUIREMENTS>.
+>
+> I can run them temporarily for this job using <AVAILABLE_TEMPORARY_PROVIDERS>, or set them up once using <AVAILABLE_PERSISTENT_PROVIDERS> so future runs can use them too. Either option may download packages. I need your approval before proceeding. Good to go, and which option would you prefer?
+>
+> If you would rather install them yourself, follow the official uv installation instructions at https://docs.astral.sh/uv/getting-started/installation/ and FFmpeg download instructions at https://ffmpeg.org/download.html, then let me know when they are ready.
+
+Do not start installation or the caption workflow until the user explicitly selects and approves an option.
 
 ### 1. Resolve preferences and required inputs
 
