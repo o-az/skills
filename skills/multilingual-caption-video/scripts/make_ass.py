@@ -4,6 +4,13 @@ import argparse
 import json
 import math
 from pathlib import Path
+from typing import TypedDict
+
+
+class CaptionCue(TypedDict):
+    start: float
+    end: float
+    text: str
 
 
 def ass_time(seconds: float) -> str:
@@ -25,7 +32,7 @@ def ass_text(text: str) -> str:
 
 
 def build_ass(
-    cues: list[dict],
+    cues: list[CaptionCue],
     *,
     width: int = 1920,
     height: int = 1080,

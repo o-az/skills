@@ -6,7 +6,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 HELPER="$SCRIPT_DIR/ghostty-remote.applescript"
 
 usage() {
-  cat <<'EOF'
+	cat <<'EOF'
 Ghostty kitty-compatible wrapper
 
 Usage:
@@ -27,359 +27,359 @@ EOF
 }
 
 die() {
-  printf '%s\n' "$*" >&2
-  exit 1
+	printf '%s\n' "$*" >&2
+	exit 1
 }
 
 resolve_match() {
-  match_value=${1-}
+	match_value=${1-}
 
-  if [ -z "$match_value" ] || [ "$match_value" = "state:focused" ] || [ "$match_value" = "focused" ]; then
-    printf '%s\n' "focused"
-    return 0
-  fi
+	if [ -z "$match_value" ] || [ "$match_value" = "state:focused" ] || [ "$match_value" = "focused" ]; then
+		printf '%s\n' "focused"
+		return 0
+	fi
 
-  case "$match_value" in
-    id:*)
-      printf '%s\n' "${match_value#id:}"
-      ;;
-    terminal_id:*)
-      printf '%s\n' "${match_value#terminal_id:}"
-      ;;
-    *)
-      die "Unsupported --match value: $match_value"
-      ;;
-  esac
+	case "$match_value" in
+	id:*)
+		printf '%s\n' "${match_value#id:}"
+		;;
+	terminal_id:*)
+		printf '%s\n' "${match_value#terminal_id:}"
+		;;
+	*)
+		die "Unsupported --match value: $match_value"
+		;;
+	esac
 }
 
 run_helper() {
-  osascript "$HELPER" "$@"
+	osascript "$HELPER" "$@"
 }
 
 frontmost_bundle_id() {
-  osascript -e 'tell application "System Events" to get bundle identifier of first application process whose frontmost is true' 2>/dev/null || true
+	osascript -e 'tell application "System Events" to get bundle identifier of first application process whose frontmost is true' 2>/dev/null || true
 }
 
 activate_bundle_id() {
-  [ -n "${1-}" ] || return 0
-  osascript >/dev/null 2>&1 <<EOF || true
+	[ -n "${1-}" ] || return 0
+	osascript >/dev/null 2>&1 <<EOF || true
 tell application id "$1" to activate
 EOF
 }
 
 quote_arg() {
-  escaped=$(printf '%s' "$1" | sed "s/'/'\\''/g")
-  printf "'%s'" "$escaped"
+	escaped=$(printf '%s' "$1" | sed "s/'/'\\''/g")
+	printf "'%s'" "$escaped"
 }
 
 shell_join() {
-  joined=''
-  first=1
+	joined=''
+	first=1
 
-  for arg in "$@"; do
-    quoted=$(quote_arg "$arg")
-    if [ "$first" -eq 1 ]; then
-      joined=$quoted
-      first=0
-    else
-      joined="$joined $quoted"
-    fi
-  done
+	for arg in "$@"; do
+		quoted=$(quote_arg "$arg")
+		if [ "$first" -eq 1 ]; then
+			joined=$quoted
+			first=0
+		else
+			joined="$joined $quoted"
+		fi
+	done
 
-  printf '%s\n' "$joined"
+	printf '%s\n' "$joined"
 }
 
 is_simple_arg() {
-  case "$1" in
-    *[!A-Za-z0-9_./:=+,-]*)
-      return 1
-      ;;
-    *)
-      return 0
-      ;;
-  esac
+	case "$1" in
+	*[!A-Za-z0-9_./:=+,-]*)
+		return 1
+		;;
+	*)
+		return 0
+		;;
+	esac
 }
 
 serialize_launch_command() {
-  [ "$#" -gt 0 ] || {
-    printf '\n'
-    return 0
-  }
+	[ "$#" -gt 0 ] || {
+		printf '\n'
+		return 0
+	}
 
-  simple_mode=1
-  for arg in "$@"; do
-    if ! is_simple_arg "$arg"; then
-      simple_mode=0
-      break
-    fi
-  done
+	simple_mode=1
+	for arg in "$@"; do
+		if ! is_simple_arg "$arg"; then
+			simple_mode=0
+			break
+		fi
+	done
 
-  if [ "$simple_mode" -eq 1 ]; then
-    printf 'direct:%s\n' "$(printf '%s' "$*" | sed 's/  */ /g')"
-  else
-    first_arg=$1
-    shift
+	if [ "$simple_mode" -eq 1 ]; then
+		printf 'direct:%s\n' "$(printf '%s' "$*" | sed 's/  */ /g')"
+	else
+		first_arg=$1
+		shift
 
-    if ! is_simple_arg "$first_arg"; then
-      die "Launch executable paths with spaces or shell-special characters are not supported yet: $first_arg"
-    fi
+		if ! is_simple_arg "$first_arg"; then
+			die "Launch executable paths with spaces or shell-special characters are not supported yet: $first_arg"
+		fi
 
-    if [ "$#" -gt 0 ]; then
-      printf '%s %s\n' "$first_arg" "$(shell_join "$@")"
-    else
-      printf '%s\n' "$first_arg"
-    fi
-  fi
+		if [ "$#" -gt 0 ]; then
+			printf '%s %s\n' "$first_arg" "$(shell_join "$@")"
+		else
+			printf '%s\n' "$first_arg"
+		fi
+	fi
 }
 
 normalize_bool_token() {
-  case "$1" in
-    1|true|yes|on)
-      printf '1\n'
-      ;;
-    0|false|no|off)
-      printf '0\n'
-      ;;
-    *)
-      die "Unsupported boolean value: $1"
-      ;;
-  esac
+	case "$1" in
+	1 | true | yes | on)
+		printf '1\n'
+		;;
+	0 | false | no | off)
+		printf '0\n'
+		;;
+	*)
+		die "Unsupported boolean value: $1"
+		;;
+	esac
 }
 
 if [ "${1-}" = "@" ]; then
-  shift
+	shift
 fi
 
 command_name=${1-help}
 if [ "$#" -gt 0 ]; then
-  shift
+	shift
 fi
 
 case "$command_name" in
-  help|-h|--help)
-    usage
-    ;;
+help | -h | --help)
+	usage
+	;;
 
-  ls)
-    run_helper tree
-    ;;
+ls)
+	run_helper tree
+	;;
 
-  snapshot)
-    match_value="state:focused"
-    extent_value="screen"
+snapshot)
+	match_value="state:focused"
+	extent_value="screen"
 
-    while [ "$#" -gt 0 ]; do
-      case "$1" in
-        --match)
-          [ "$#" -ge 2 ] || die "snapshot requires a value after --match"
-          match_value=$2
-          shift 2
-          ;;
-        --extent)
-          [ "$#" -ge 2 ] || die "snapshot requires a value after --extent"
-          extent_value=$2
-          shift 2
-          ;;
-        *)
-          die "Unsupported snapshot argument: $1"
-          ;;
-      esac
-    done
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+		--match)
+			[ "$#" -ge 2 ] || die "snapshot requires a value after --match"
+			match_value=$2
+			shift 2
+			;;
+		--extent)
+			[ "$#" -ge 2 ] || die "snapshot requires a value after --extent"
+			extent_value=$2
+			shift 2
+			;;
+		*)
+			die "Unsupported snapshot argument: $1"
+			;;
+		esac
+	done
 
-    target=$(resolve_match "$match_value")
-    run_helper snapshot "$target" "$extent_value"
-    ;;
+	target=$(resolve_match "$match_value")
+	run_helper snapshot "$target" "$extent_value"
+	;;
 
-  focused|tree)
-    run_helper "$command_name" "$@"
-    ;;
+focused | tree)
+	run_helper "$command_name" "$@"
+	;;
 
-  focus-window)
-    match_value="state:focused"
+focus-window)
+	match_value="state:focused"
 
-    while [ "$#" -gt 0 ]; do
-      case "$1" in
-        --match)
-          [ "$#" -ge 2 ] || die "focus-window requires a value after --match"
-          match_value=$2
-          shift 2
-          ;;
-        *)
-          die "Unsupported focus-window argument: $1"
-          ;;
-      esac
-    done
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+		--match)
+			[ "$#" -ge 2 ] || die "focus-window requires a value after --match"
+			match_value=$2
+			shift 2
+			;;
+		*)
+			die "Unsupported focus-window argument: $1"
+			;;
+		esac
+	done
 
-    target=$(resolve_match "$match_value")
-    run_helper focus "$target"
-    ;;
+	target=$(resolve_match "$match_value")
+	run_helper focus "$target"
+	;;
 
-  send-text)
-    match_value="state:focused"
-    use_stdin=0
+send-text)
+	match_value="state:focused"
+	use_stdin=0
 
-    while [ "$#" -gt 0 ]; do
-      case "$1" in
-        --match)
-          [ "$#" -ge 2 ] || die "send-text requires a value after --match"
-          match_value=$2
-          shift 2
-          ;;
-        --stdin)
-          use_stdin=1
-          shift
-          ;;
-        --)
-          shift
-          break
-          ;;
-        *)
-          break
-          ;;
-      esac
-    done
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+		--match)
+			[ "$#" -ge 2 ] || die "send-text requires a value after --match"
+			match_value=$2
+			shift 2
+			;;
+		--stdin)
+			use_stdin=1
+			shift
+			;;
+		--)
+			shift
+			break
+			;;
+		*)
+			break
+			;;
+		esac
+	done
 
-    if [ "$use_stdin" -eq 1 ]; then
-      text_payload=$(cat)
-      if [ "$#" -gt 0 ]; then
-        die "send-text accepts either --stdin or an inline text argument, not both"
-      fi
-    else
-      [ "$#" -gt 0 ] || die "send-text requires text or --stdin"
-      text_payload=$*
-    fi
+	if [ "$use_stdin" -eq 1 ]; then
+		text_payload=$(cat)
+		if [ "$#" -gt 0 ]; then
+			die "send-text accepts either --stdin or an inline text argument, not both"
+		fi
+	else
+		[ "$#" -gt 0 ] || die "send-text requires text or --stdin"
+		text_payload=$*
+	fi
 
-    target=$(resolve_match "$match_value")
-    run_helper send "$target" "$text_payload"
-    ;;
+	target=$(resolve_match "$match_value")
+	run_helper send "$target" "$text_payload"
+	;;
 
-  get-text)
-    match_value="state:focused"
-    extent_value="screen"
+get-text)
+	match_value="state:focused"
+	extent_value="screen"
 
-    while [ "$#" -gt 0 ]; do
-      case "$1" in
-        --match)
-          [ "$#" -ge 2 ] || die "get-text requires a value after --match"
-          match_value=$2
-          shift 2
-          ;;
-        --extent)
-          [ "$#" -ge 2 ] || die "get-text requires a value after --extent"
-          extent_value=$2
-          shift 2
-          ;;
-        *)
-          die "Unsupported get-text argument: $1"
-          ;;
-      esac
-    done
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+		--match)
+			[ "$#" -ge 2 ] || die "get-text requires a value after --match"
+			match_value=$2
+			shift 2
+			;;
+		--extent)
+			[ "$#" -ge 2 ] || die "get-text requires a value after --extent"
+			extent_value=$2
+			shift 2
+			;;
+		*)
+			die "Unsupported get-text argument: $1"
+			;;
+		esac
+	done
 
-    target=$(resolve_match "$match_value")
+	target=$(resolve_match "$match_value")
 
-    case "$extent_value" in
-      screen)
-        run_helper capture-screen "$target"
-        ;;
-      scrollback|all)
-        run_helper capture-scrollback "$target"
-        ;;
-      *)
-        die "Unsupported --extent value: $extent_value"
-        ;;
-    esac
-    ;;
+	case "$extent_value" in
+	screen)
+		run_helper capture-screen "$target"
+		;;
+	scrollback | all)
+		run_helper capture-scrollback "$target"
+		;;
+	*)
+		die "Unsupported --extent value: $extent_value"
+		;;
+	esac
+	;;
 
-  launch)
-    match_value="state:focused"
-    type_value="window"
-    cwd_value=""
-    keep_focus=0
-    previous_app_bundle_id=""
+launch)
+	match_value="state:focused"
+	type_value="window"
+	cwd_value=""
+	keep_focus=0
+	previous_app_bundle_id=""
 
-    while [ "$#" -gt 0 ]; do
-      case "$1" in
-        --match)
-          [ "$#" -ge 2 ] || die "launch requires a value after --match"
-          match_value=$2
-          shift 2
-          ;;
-        --type)
-          [ "$#" -ge 2 ] || die "launch requires a value after --type"
-          type_value=$2
-          shift 2
-          ;;
-        --cwd)
-          [ "$#" -ge 2 ] || die "launch requires a value after --cwd"
-          cwd_value=$2
-          shift 2
-          ;;
-        --keep-focus)
-          keep_focus=1
-          shift
-          ;;
-        --keep-focus=*)
-          keep_focus=$(normalize_bool_token "${1#--keep-focus=}")
-          shift
-          ;;
-        --)
-          shift
-          break
-          ;;
-        -*)
-          die "Unsupported launch argument: $1"
-          ;;
-        *)
-          break
-          ;;
-      esac
-    done
+	while [ "$#" -gt 0 ]; do
+		case "$1" in
+		--match)
+			[ "$#" -ge 2 ] || die "launch requires a value after --match"
+			match_value=$2
+			shift 2
+			;;
+		--type)
+			[ "$#" -ge 2 ] || die "launch requires a value after --type"
+			type_value=$2
+			shift 2
+			;;
+		--cwd)
+			[ "$#" -ge 2 ] || die "launch requires a value after --cwd"
+			cwd_value=$2
+			shift 2
+			;;
+		--keep-focus)
+			keep_focus=1
+			shift
+			;;
+		--keep-focus=*)
+			keep_focus=$(normalize_bool_token "${1#--keep-focus=}")
+			shift
+			;;
+		--)
+			shift
+			break
+			;;
+		-*)
+			die "Unsupported launch argument: $1"
+			;;
+		*)
+			break
+			;;
+		esac
+	done
 
-    case "$type_value" in
-      window|split|vsplit)
-        helper_kind="split:right"
-        ;;
-      hsplit)
-        helper_kind="split:down"
-        ;;
-      tab)
-        helper_kind="tab"
-        ;;
-      os-window)
-        helper_kind="window"
-        ;;
-      *)
-        die "Unsupported --type value: $type_value"
-        ;;
-    esac
+	case "$type_value" in
+	window | split | vsplit)
+		helper_kind="split:right"
+		;;
+	hsplit)
+		helper_kind="split:down"
+		;;
+	tab)
+		helper_kind="tab"
+		;;
+	os-window)
+		helper_kind="window"
+		;;
+	*)
+		die "Unsupported --type value: $type_value"
+		;;
+	esac
 
-    command_value=""
-    if [ "$#" -gt 0 ]; then
-      command_value=$(serialize_launch_command "$@")
-    fi
+	command_value=""
+	if [ "$#" -gt 0 ]; then
+		command_value=$(serialize_launch_command "$@")
+	fi
 
-    if [ "$keep_focus" -eq 1 ]; then
-      previous_app_bundle_id=$(frontmost_bundle_id)
-    fi
+	if [ "$keep_focus" -eq 1 ]; then
+		previous_app_bundle_id=$(frontmost_bundle_id)
+	fi
 
-    target=$(resolve_match "$match_value")
-    set -- launch "kind=$helper_kind" "target=$target" "keep_focus=$keep_focus"
-    if [ -n "$cwd_value" ]; then
-      set -- "$@" "cwd=$cwd_value"
-    fi
-    if [ -n "$command_value" ]; then
-      set -- "$@" "command=$command_value"
-    fi
-    launch_result=$(run_helper "$@")
+	target=$(resolve_match "$match_value")
+	set -- launch "kind=$helper_kind" "target=$target" "keep_focus=$keep_focus"
+	if [ -n "$cwd_value" ]; then
+		set -- "$@" "cwd=$cwd_value"
+	fi
+	if [ -n "$command_value" ]; then
+		set -- "$@" "command=$command_value"
+	fi
+	launch_result=$(run_helper "$@")
 
-    if [ "$keep_focus" -eq 1 ] && [ -n "$previous_app_bundle_id" ] && [ "$previous_app_bundle_id" != "com.mitchellh.ghostty" ]; then
-      activate_bundle_id "$previous_app_bundle_id"
-    fi
+	if [ "$keep_focus" -eq 1 ] && [ -n "$previous_app_bundle_id" ] && [ "$previous_app_bundle_id" != "com.mitchellh.ghostty" ]; then
+		activate_bundle_id "$previous_app_bundle_id"
+	fi
 
-    printf '%s\n' "$launch_result"
-    ;;
+	printf '%s\n' "$launch_result"
+	;;
 
-  *)
-    die "Unsupported command: $command_name"
-    ;;
+*)
+	die "Unsupported command: $command_name"
+	;;
 esac

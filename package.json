@@ -14,19 +14,10 @@
     "lint": "oxlint --fix",
     "format": "oxfmt --write",
     "check": "bun run --parallel --stream --reporter='append-only' format lint",
-    "validate-skills": "bash -c 'for dir in skills/*/; do uvx --from skills-ref agentskills validate $dir; done'",
-    "prepare": "simple-git-hooks"
+    "validate-skills": "bash -c 'for dir in skills/*/; do uvx --from skills-ref agentskills validate $dir; done'"
   },
   "devDependencies": {
-    "@j178/prek": "^0.4.10",
     "oxfmt": "^0.59.0",
-    "oxlint": "^1.74.0",
-    "simple-git-hooks": "^2.13.1"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "bun prek run --all-files --config='.github/.pre-commit.yml' && bun check && bun validate-skills"
-  },
-  "trustedDependencies": [
-    "@j178/prek"
-  ]
+    "oxlint": "^1.74.0"
+  }
 }

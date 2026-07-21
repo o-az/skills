@@ -126,11 +126,6 @@
         "env": { "NO_COLOR": "true" },
         "ignore_system_version": false
       }
-    },
-    "gopls": {
-      "binary": {
-        "ignore_system_version": false
-      }
     }
   },
   "hidden_files": [

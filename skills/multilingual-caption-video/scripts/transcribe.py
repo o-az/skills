@@ -8,13 +8,36 @@
 import argparse
 import json
 import math
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Protocol, TypedDict
+
+
+class TranscriptSegment(Protocol):
+    start: float
+    end: float
+    text: str
+
+
+class TranscriptCue(TypedDict):
+    start: float
+    end: float
+    text: str
+
+
+class TranscriptPayload(TypedDict):
+    language: str
+    language_probability: float
+    text: str
+    cues: list[TranscriptCue]
 
 
 def transcript_payload(
-    segments, language: str, language_probability: float
-) -> dict:
-    cues = []
+    segments: Iterable[TranscriptSegment],
+    language: str,
+    language_probability: float,
+) -> TranscriptPayload:
+    cues: list[TranscriptCue] = []
     for segment in segments:
         text = segment.text.strip()
         if not text:

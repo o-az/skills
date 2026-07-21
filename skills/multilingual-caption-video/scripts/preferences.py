@@ -3,7 +3,12 @@
 import argparse
 import json
 import os
+from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
+
+
+type Preferences = dict[str, str | int]
 
 
 def default_preferences_path() -> Path:
@@ -13,7 +18,7 @@ def default_preferences_path() -> Path:
     return config_home / "multilingual-caption-video" / "preferences.json"
 
 
-def validate_preferences(preferences: dict) -> dict:
+def validate_preferences(preferences: Mapping[str, object]) -> Preferences:
     allowed = {"delivery", "font", "font_size", "language"}
     unknown = set(preferences) - allowed
     if unknown:
@@ -30,22 +35,24 @@ def validate_preferences(preferences: dict) -> dict:
     ):
         raise ValueError("font_size must be a positive integer")
     for key in ("font", "language"):
+        value = preferences.get(key)
         if key in preferences and (
-            not isinstance(preferences[key], str)
-            or not preferences[key].strip()
+            not isinstance(value, str) or not value.strip()
         ):
             raise ValueError(f"{key} must be a non-empty string")
-    return dict(sorted(preferences.items()))
+    return cast(Preferences, dict(sorted(preferences.items())))
 
 
-def load_preferences(path: Path | None = None) -> dict:
+def load_preferences(path: Path | None = None) -> Preferences:
     path = path or default_preferences_path()
     if not path.exists():
         return {}
     return validate_preferences(json.loads(path.read_text(encoding="utf-8")))
 
 
-def save_preferences(updates: dict, path: Path | None = None) -> dict:
+def save_preferences(
+    updates: Mapping[str, object], path: Path | None = None
+) -> Preferences:
     path = path or default_preferences_path()
     preferences = validate_preferences({**load_preferences(path), **updates})
     path.parent.mkdir(parents=True, exist_ok=True)

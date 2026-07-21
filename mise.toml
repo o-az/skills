@@ -5,7 +5,11 @@ color = true
 pipx.uvx = true
 experimental = true
 color_theme = "charm"
-minimum_release_age_excludes = ["bun", "node", "npm:oxfmt", "npm:oxlint"]
+minimum_release_age_excludes = ["hk", "bun", "node", "npm:oxfmt", "npm:oxlint"]
+
+[env]
+HK_MISE = 1
+UV_PREVIEW = 1
 
 [tools]
 uv = "latest"
@@ -13,6 +17,20 @@ bun = "latest"
 node = "latest"
 tombi = "latest"
 usage = "latest"
+ghalint = "latest"
+gitleaks = "latest"
+actionlint = "latest"
+betterleaks = "latest"
 shfmt = "latest"
-"npm:oxfmt" = "latest"
-"npm:oxlint" = "latest"
+pkl = "latest"
+
+[hooks]
+postinstall = "hk install --mise"
+
+[tasks.check]
+description = "format & lint files"
+run = "hk fix --all && hk check --all"
+
+[tasks.ci]
+description = "run CI tasks"
+run = "hk fix --all && hk check --all"

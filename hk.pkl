@@ -1,0 +1,111 @@
+amends "package://github.com/jdx/hk/releases/download/v1.51.0/hk@1.51.0#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v1.51.0/hk@1.51.0#/Builtins.pkl"
+
+// https://hk.jdx.dev/configuration.html
+
+walk_ignore = true
+
+local linters = new Mapping<String, Step> {
+  ["ruff"] = (Builtins.ruff) {
+    exclude = List("**/.agents/**")
+    check = "uv run ruff check --force-exclude {{ files }}"
+    fix = "uv run ruff check --force-exclude --fix {{ files }}"
+  }
+  ["oxlint"] = (Builtins.ox_lint) {
+    check = "bun x oxlint --deny-warnings {{ files }}"
+    fix = "bun x oxlint --deny-warnings --fix {{ files }}"
+  }
+  ["ghalint-action"] = Builtins.ghalint_action
+  ["ghalint-workflow"] = (Builtins.ghalint_workflow) {
+    check =
+      #"""
+      tmp="$(mktemp -d)"
+      trap 'rm -rf "$tmp"' EXIT
+      tar -cf - -- {{ files }} | tar -xf - -C "$tmp"
+      cd "$tmp"
+      ghalint run
+      """#
+  }
+  ["actionlint"] = (Builtins.actionlint) {
+    glob =
+      List(
+        ".github/workflows/*.yml",
+        ".github/workflows/*.yaml",
+      )
+  }
+  ["betterleaks"] = (Builtins.betterleaks) {
+    exclude = List("users/o/thaw/thaw.json")
+  }
+  ["gitleaks"] = (Builtins.gitleaks) {
+    check =
+      #"""
+      root="$PWD"
+      tmp="$(mktemp -d)"
+      trap 'rm -rf "$tmp"' EXIT
+      tar -cf - -- {{ files }} | tar -xf - -C "$tmp"
+      cd "$tmp"
+      gitleaks dir --redact --config "$root/.github/.gitleaks.toml" --verbose --no-banner .
+      """#
+  }
+  ["shellcheck"] = (Builtins.shellcheck) {
+    exclude = List("**/skills/**")
+  }
+  ["pyrefly"] {
+    glob = List("pyproject.toml")
+    exclude = List("**/.agents/**")
+    workspace_indicator = "pyproject.toml"
+    check = "sh -c 'cd \"{{ workspace }}\" && uv run pyrefly check --preset=all'"
+  }
+  ["validate-skills"] {
+    glob = List("skills/*/SKILL.md")
+    check =
+      "bash -c 'for dir in skills/*/; do uvx --from skills-ref agentskills validate \"$dir\"; done'"
+  }
+}
+
+local formatters = new Mapping<String, Step> {
+  ["pkl-format"] = (Builtins.pkl_format) {
+    glob = List("*.pkl", "**/*.pkl")
+  }
+  ["ruff-format"] = (Builtins.ruff_format) {
+    check_diff = "uv run ruff format --quiet --force-exclude --diff {{ files }}"
+    fix = "uv run ruff format --quiet --force-exclude {{ files }}"
+  }
+  ["shfmt"] = Builtins.shfmt
+  ["oxfmt"] = (Builtins.oxfmt) {
+    exclude = List("*.toml")
+    check = "bun x oxfmt --check {{ files }}"
+    check_list_files = "bun x oxfmt --list-different {{ files }}"
+    fix = "bun x oxfmt --write {{ files }}"
+  }
+  // tombi --diff is ANSI stderr, not git-applyable; use plain check + fix
+  ["tombi-format"] = (Builtins.tombi_format) {
+    check_diff = null
+    check = "tombi format --check {{ files }}"
+    fix = "tombi format {{ files }}"
+  }
+}
+
+local allSteps = (formatters) {
+  for (name, step in linters) {
+    [name] = step
+  }
+}
+
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    steps = allSteps
+  }
+  // formatters only — `just fmt` / `hk fix --all`
+  ["fix"] {
+    fix = true
+    steps = formatters
+  }
+  // linters only — `just lint` / `hk check --all`
+  ["check"] {
+    steps = linters
+  }
+}
