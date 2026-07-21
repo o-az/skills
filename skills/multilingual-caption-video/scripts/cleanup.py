@@ -1,4 +1,9 @@
-#!/usr/bin/env -S uv run
+#!/usr/bin/env -S uv run --script
+
+# /// script
+# requires-python = ">=3.12"
+# dependencies = []
+# ///
 
 import argparse
 import json
@@ -72,8 +77,7 @@ def main() -> None:
         description="Create and safely clean caption-video work directories."
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    create_parser = subparsers.add_parser("create")
-    create_parser.add_argument("--parent", type=Path)
+    subparsers.add_parser("create")
     schedule_parser = subparsers.add_parser("schedule")
     schedule_parser.add_argument("path", type=Path)
     schedule_parser.add_argument("--delay", type=float, default=300)
@@ -85,7 +89,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "create":
-        print(create_workdir(args.parent))
+        print(create_workdir())
     elif args.command == "schedule":
         print(
             json.dumps(

@@ -15,6 +15,7 @@ env:
   UV_PREVIEW: 1
   DISABLE_TELEMETRY: 1
   NODE_ENV: "production"
+  MISE_HTTP_TIMEOUT: 120
   MISE_EXPERIMENTAL: true
   NODE_OPTIONS: "--disable-warning=ExperimentalWarning --disable-warning=DeprecationWarning"
 

@@ -5,24 +5,33 @@ color = true
 pipx.uvx = true
 experimental = true
 color_theme = "charm"
-minimum_release_age_excludes = ["hk", "bun", "node", "npm:oxfmt", "npm:oxlint"]
+minimum_release_age_excludes = [
+  "hk",
+  "uv",
+  "pkl",
+  "bun",
+  "node",
+  "npm:oxfmt",
+  "npm:oxlint"
+]
 
 [env]
 HK_MISE = 1
 UV_PREVIEW = 1
 
 [tools]
+hk = "latest"
 uv = "latest"
 bun = "latest"
+pkl = "latest"
 node = "latest"
+shfmt = "latest"
 tombi = "latest"
 usage = "latest"
 ghalint = "latest"
 gitleaks = "latest"
 actionlint = "latest"
 betterleaks = "latest"
-shfmt = "latest"
-pkl = "latest"
 
 [hooks]
 postinstall = "hk install --mise"

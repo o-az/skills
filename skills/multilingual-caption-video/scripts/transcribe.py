@@ -1,7 +1,7 @@
-#!/usr/bin/env -S uv run
+#!/usr/bin/env -S uv run --script
 
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.12"
 # dependencies = ["faster-whisper==1.2.1"]
 # ///
 
@@ -46,6 +46,7 @@ def transcript_payload(
             not all(
                 math.isfinite(value) for value in (segment.start, segment.end)
             )
+            or segment.start < 0
             or segment.end <= segment.start
         ):
             raise ValueError(
