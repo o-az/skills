@@ -26,6 +26,7 @@ The bundled Python scripts declare their own dependencies using inline script me
 - `scripts/download.py` downloads one public URL using its uv-managed `yt-dlp` Python dependency and prints the final local path.
 - `scripts/transcribe.py` detects the spoken language, transcribes the video, and emits timestamped JSON.
 - `scripts/make_ass.py` converts translated caption JSON into styled ASS subtitles.
+- `scripts/deliver.py` copies a verified MP4 to the operating system's Downloads directory using a safe, collision-free filename.
 - `scripts/preferences.py` reads and, only with explicit user consent, saves sparse JSON preferences.
 - `scripts/cleanup.py` creates marked work directories and safely schedules or cancels their deletion.
 
@@ -39,8 +40,8 @@ Run any script with `uv run <script> --help` for its interface.
 - Do not attach cookies, credentials, or authentication headers when downloading a URL unless the user explicitly requests it.
 - Preserve meaning and timing. Do not summarize, censor, embellish, or invent speech.
 - Keep each caption concise, on screen long enough to read, and at no more than two lines.
-- Default to font size 35 when neither the request nor saved preferences specify a size. Always honor an explicit user choice.
-- Use a font that covers the target script. For Arabic, prefer `Noto Naskh Arabic UI`, then `Noto Sans Arabic`, then another installed Arabic-capable font.
+- When neither the request nor saved preferences specify a size, let `scripts/make_ass.py` scale it from the video dimensions. Always honor an explicit user choice.
+- Use an installed medium-weight sans-serif font that covers the target script. For Latin text, prefer Arial, Helvetica, Roboto, DejaVu Sans, or Liberation Sans. For Arabic, prefer Arial, Noto Sans Arabic, Geeza Pro, SF Arabic, or another installed Arabic-capable sans-serif.
 - Deliver only the generated MP4. A request for a URL authorizes uploading that generated file, not unrelated local files.
 - Write preferences only after explicit consent. An explicit request always overrides a saved preference for that job.
 - Delete only marked working directories created by `scripts/cleanup.py`.
@@ -85,7 +86,7 @@ For a local file, resolve its absolute path and verify it is a regular video fil
 SOURCE="$(uv run --script "$SKILL_ROOT/scripts/download.py" "<VIDEO_URL>" "$WORK_DIR")"
 ```
 
-The downloader rejects credentials and hosts resolving to non-public addresses, disables playlists, writes only inside the marked work directory, and reports the final path after yt-dlp post-processing. Probe the source:
+The downloader rejects credentials and hosts resolving to non-public addresses, disables playlists, writes only inside the marked work directory, and reports the final path after yt-dlp post-processing. Its safe filename retains yt-dlp's title and media ID so file delivery can derive a meaningful original stem. Probe the source:
 
 ```bash
 ffprobe -v error -show_entries format=duration -show_entries stream=codec_type,codec_name,width,height -of json "<SOURCE>"
@@ -128,7 +129,7 @@ Inspect fonts using the operating system's available facilities instead of assum
 - macOS: inspect font families with CoreText-aware tools such as `system_profiler SPFontsDataType`, or inspect `/System/Library/Fonts`, `/Library/Fonts`, and `~/Library/Fonts`. Use the font family name rather than only its filename.
 - Windows: inspect the Windows Fonts directory or installed-font registry entries with PowerShell.
 
-For Arabic, prefer an installed `Noto Naskh Arabic UI`, `Noto Sans Arabic`, `Geeza Pro`, `SF Arabic`, or another Arabic-capable font. Confirm from the render logs or a preview frame that the renderer selected a font containing the required glyphs.
+Prefer a medium-weight sans-serif because it remains readable against moving imagery. Arial and Helvetica are common caption fonts; use the installed operating-system alternatives listed above rather than requiring one universal font. Confirm from the render logs or a preview frame that the renderer selected a font containing the required glyphs.
 
 For example, on a Fontconfig system:
 
@@ -136,11 +137,13 @@ For example, on a Fontconfig system:
 fc-match "Noto Naskh Arabic UI"
 ```
 
-Generate the subtitle file using the font size resolved in step 1:
+Generate the subtitle file. Unless the user requested or saved an explicit size, omit `--font-size`: the script uses 7.5% of the shorter video edge, equivalent to about 7.5% of height for landscape video and 4.2% for 9:16 video. This follows BBC authoring guidance while keeping portrait captions from becoming oversized.
 
 ```bash
-uv run "$SKILL_ROOT/scripts/make_ass.py" "$WORK_DIR/captions.json" "$WORK_DIR/captions.ass" --width <WIDTH> --height <HEIGHT> --font "<FONT>" --font-size <FONT_SIZE>
+uv run "$SKILL_ROOT/scripts/make_ass.py" "$WORK_DIR/captions.json" "$WORK_DIR/captions.ass" --width <WIDTH> --height <HEIGHT> --font "<FONT>"
 ```
+
+Add `--font-size <FONT_SIZE>` only for an explicit or saved size. The default ASS region uses 12 pixels of padding on each horizontal edge, so wrapping has up to `WIDTH - 24` pixels without stretching short captions. The default bottom margin is 105 pixels, placing captions 50% higher than the previous 70-pixel baseline. Override these with `--margin-horizontal` or `--margin-bottom` only when the request or visual inspection requires it.
 
 ### 7. Burn captions into a new MP4
 
@@ -171,19 +174,27 @@ Confirm that captions are present, correctly shaped, legible, inside the safe ar
 
 ### 9. Deliver the requested form
 
-For `file`, use the current platform's file-delivery or attachment capability and do not upload. For `url`, upload the generated MP4 to the configured video-capable host. When no uploader is configured, use `pstbn.dev`:
+For `file`, copy the verified MP4 to the operating system's Downloads directory, then deliver that permanent file without uploading it. Pass the local source's original path or the downloaded source's yt-dlp-derived path as `<ORIGINAL_NAME>`, and use the target language's lowercase ISO or BCP 47 code for `<LANGUAGE_CODE>`:
+
+```bash
+DELIVERED="$(uv run "$SKILL_ROOT/scripts/deliver.py" "$WORK_DIR/captioned.mp4" "<ORIGINAL_NAME>" "<LANGUAGE_CODE>")"
+```
+
+The resulting name is `YYYYMMDD-<original-stem>-<language-code>-subtitles.mp4`. The script sanitizes the original stem and uses `-2`, `-3`, and so on when a name already exists; it never overwrites another file. It uses the Windows Downloads known folder, the configured XDG Downloads directory on Linux when available, and `~/Downloads` otherwise. If that directory cannot be created or written, report the issue and fall back to the platform's normal file-delivery or attachment capability from the work directory.
+
+For `url`, upload the generated MP4 to the configured video-capable host. When no uploader is configured, use `pstbn.dev`:
 
 ```bash
 curl --fail-with-body --silent --show-error --request POST --form "file=@$WORK_DIR/captioned.mp4" https://pstbn.dev
 ```
 
-Validate that an upload response is an HTTP(S) URL. Return only the requested delivery form unless the user asks for both. Include the target language, and do not claim completion without a successful probe and visual inspection.
+Validate that an upload response is an HTTP(S) URL. Return only the requested delivery form unless the user asks for both. For file delivery, return the permanent path printed by `deliver.py`, not the temporary work-directory MP4. Include the target language, and do not claim completion without a successful probe and visual inspection.
 
 In the successful result, tell the user: “I used font <FONT>, which was available on your system. If you'd like to use a different font or size, or another subtitle style, let me know.” Substitute the actual selected font name.
 
 ### 10. Announce and schedule cleanup
 
-Only after successful delivery, tell the user: “I will clean up the working files and delete the local assets five minutes from now. Let me know before then if you want me to keep them.” Then schedule cleanup:
+Only after successful delivery, tell the user: “I will clean up the working files and delete the temporary local assets five minutes from now. The delivered file in Downloads will remain. Let me know before then if you want me to keep the working files.” Then schedule cleanup:
 
 ```bash
 uv run "$SKILL_ROOT/scripts/cleanup.py" schedule "$WORK_DIR" --delay 300

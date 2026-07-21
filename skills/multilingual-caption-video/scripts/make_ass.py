@@ -31,22 +31,36 @@ def ass_text(text: str) -> str:
     )
 
 
+def default_font_size(width: int, height: int) -> int:
+    return max(16, round(min(width, height) * 0.075))
+
+
 def build_ass(
     cues: list[CaptionCue],
     *,
     width: int = 1920,
     height: int = 1080,
-    font: str = "Noto Sans",
-    font_size: int = 35,
-    margin_bottom: int = 70,
+    font: str = "Arial",
+    font_size: int | None = None,
+    margin_bottom: int = 105,
+    margin_horizontal: int = 12,
 ) -> str:
     if not cues:
         raise ValueError("At least one caption cue is required")
     if "," in font or "\n" in font or "\r" in font:
         raise ValueError("Font name contains invalid characters")
+    resolved_font_size = (
+        default_font_size(width, height) if font_size is None else font_size
+    )
     if not all(
         isinstance(value, int) and not isinstance(value, bool) and value > 0
-        for value in (width, height, font_size, margin_bottom)
+        for value in (
+            width,
+            height,
+            resolved_font_size,
+            margin_bottom,
+            margin_horizontal,
+        )
     ):
         raise ValueError(
             "ASS dimensions, font size, and margin must be positive integers"
@@ -80,7 +94,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,{font},{font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,1,2,40,40,{margin_bottom},1
+Style: Default,{font},{resolved_font_size},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,1,2,{margin_horizontal},{margin_horizontal},{margin_bottom},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -96,9 +110,10 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     parser.add_argument("--width", type=int, default=1920)
     parser.add_argument("--height", type=int, default=1080)
-    parser.add_argument("--font", default="Noto Sans")
-    parser.add_argument("--font-size", type=int, default=35)
-    parser.add_argument("--margin-bottom", type=int, default=70)
+    parser.add_argument("--font", default="Arial")
+    parser.add_argument("--font-size", type=int)
+    parser.add_argument("--margin-bottom", type=int, default=105)
+    parser.add_argument("--margin-horizontal", type=int, default=12)
     args = parser.parse_args()
 
     parsed = json.loads(args.input.read_text(encoding="utf-8"))
@@ -111,6 +126,7 @@ def main() -> None:
             font=args.font,
             font_size=args.font_size,
             margin_bottom=args.margin_bottom,
+            margin_horizontal=args.margin_horizontal,
         ),
         encoding="utf-8",
     )

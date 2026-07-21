@@ -44,7 +44,8 @@ def download_options(workdir: Path) -> dict[str, object]:
     return {
         "noplaylist": True,
         "merge_output_format": "mp4",
-        "outtmpl": {"default": str(workdir / "source.%(ext)s")},
+        "outtmpl": {"default": str(workdir / "%(title).120B [%(id)s].%(ext)s")},
+        "windowsfilenames": True,
         "quiet": True,
         "noprogress": True,
     }

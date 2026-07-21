@@ -27,12 +27,13 @@
         "Asks for file or URL delivery when neither the request nor saved preferences specify it",
         "Does not overwrite or delete the local source file",
         "Transcribes the non-English source with the multilingual model",
-        "Uses the requested, saved, or default font size in that priority order",
+        "Uses the requested or saved font size when present; otherwise scales the default from the video dimensions",
         "Uses a compatible font already installed on the current operating system without requiring fc-match",
         "Keeps visual-inspection previews below the image tool's upload-size limit",
         "Probes and visually checks the final MP4 before delivery",
+        "Copies file deliveries to the operating system's Downloads directory with a sanitized YYYYMMDD-original-stem-language-code-subtitles.mp4 name without overwriting an existing file",
         "Reports the selected font and offers font, size, or subtitle-style changes",
-        "Deletes only the marked generated work directory after the cleanup grace period"
+        "Deletes only the marked generated work directory after the cleanup grace period while retaining the delivered Downloads file"
       ]
     }
   ]

@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,8 +20,9 @@ sys.path.insert(0, str(SCRIPTS))
 sys.dont_write_bytecode = True
 
 from cleanup import create_workdir, keep_workdir, schedule_cleanup
+from deliver import deliver_video, normalized_language_code, sanitize_stem
 from download import download_options, validate_video_url
-from make_ass import build_ass
+from make_ass import build_ass, default_font_size
 from preferences import (
     default_preferences_path,
     load_preferences,
@@ -58,8 +60,20 @@ ass = build_ass(
     font="Noto Naskh Arabic UI",
 )
 assert "PlayResX: 1080" in ass
-assert "Style: Default,Noto Naskh Arabic UI,35," in ass
+assert default_font_size(1080, 1920) == 81
+assert default_font_size(1920, 1080) == 81
+assert "Style: Default,Noto Naskh Arabic UI,81," in ass
+assert ",2,12,12,105,1" in ass
 assert "Dialogue: 0,0:00:01.25,0:00:03.50" in ass
+
+custom_ass = build_ass(
+    [{"start": 1.25, "end": 3.5, "text": "Custom style"}],
+    font_size=35,
+    margin_bottom=70,
+    margin_horizontal=40,
+)
+assert "Style: Default,Arial,35," in custom_ass
+assert ",2,40,40,70,1" in custom_ass
 
 assert validate_video_url("https://8.8.8.8/video.mp4") == (
     "https://8.8.8.8/video.mp4"
@@ -82,8 +96,43 @@ options = download_options(download_workdir)
 assert options["noplaylist"] is True
 assert options["merge_output_format"] == "mp4"
 assert options["outtmpl"] == {
-    "default": "/tmp/caption-video.test/source.%(ext)s"
+    "default": "/tmp/caption-video.test/%(title).120B [%(id)s].%(ext)s"
 }
+assert options["windowsfilenames"] is True
+
+assert sanitize_stem("/tmp/My unsafe: video?.mov") == "My-unsafe-video"
+assert sanitize_stem(r"C:\Videos\قصيدة جميلة.mp4") == "قصيدة-جميلة"
+assert normalized_language_code("EN_us") == "en-us"
+try:
+    normalized_language_code("English")
+except ValueError:
+    pass
+else:
+    raise AssertionError("A language name should not be accepted as a code")
+
+with tempfile.TemporaryDirectory() as temporary_directory:
+    delivery_directory = Path(temporary_directory)
+    rendered = delivery_directory / "rendered.mp4"
+    rendered.write_bytes(b"video")
+    downloads = delivery_directory / "Downloads"
+    delivered = deliver_video(
+        rendered,
+        "/tmp/My Interview.mov",
+        "AR",
+        destination=downloads,
+        today=date(2026, 7, 21),
+    )
+    assert delivered.name == "20260721-My-Interview-ar-subtitles.mp4"
+    assert delivered.read_bytes() == b"video"
+    duplicate = deliver_video(
+        rendered,
+        "/tmp/My Interview.mov",
+        "ar",
+        destination=downloads,
+        today=date(2026, 7, 21),
+    )
+    assert duplicate.name == "20260721-My-Interview-ar-subtitles-2.mp4"
+    assert delivered.read_bytes() == b"video"
 
 cleanup_script = SCRIPTS / "cleanup.py"
 with tempfile.TemporaryDirectory() as temporary_directory:
