@@ -1,30 +1,82 @@
 {
-  "terminal": {
-    "shell": "system"
-  },
   "file_types": {
+    "ini": ["**/.npmrc"],
     "env": [".env", ".env.*"],
-    "shell": [".envrc"]
+    "JSONC": ["**/.zed/**/*.json"]
   },
+  "hidden_files": ["**/.ruff_cache", "**/__pycache__/**"],
+  "file_scan_exclusions": [".git", "**/.vscode"],
   "use_autoclose": true,
   "enable_language_server": true,
   "formatter": "language_server",
   "prettier": {
     "allowed": false
   },
-  "format_on_save": "on",
-  "load_direnv": "shell_hook",
   "use_auto_surround": true,
-  "show_completions_on_input": true,
-  "show_completion_documentation": true,
-  "semantic_tokens": "combined",
-  "inlay_hints": {
-    "enabled": true,
-    "show_type_hints": true,
-    "show_other_hints": true,
-    "show_parameter_hints": true
+  "language_servers": [
+    "pkl",
+    "!eslint",
+    "!biome",
+    "tombi",
+    "oxfmt",
+    "oxlint",
+    "ruff",
+    "pyrefly",
+    "markdown-oxide",
+    "json-language-server",
+    "typescript-ls",
+    "!typescript-language-server"
+  ],
+  "lsp": {
+    "pkl": {
+      "fetch": {
+        "pre_release": true
+      },
+      "binary": {
+        "ignore_system_version": false
+      }
+    },
+    "tombi": {
+      "fetch": {
+        "pre_release": true
+      },
+      "binary": {
+        "arguments": ["lsp", "-v"],
+        "env": {
+          "NO_COLOR": "true"
+        },
+        "ignore_system_version": false
+      }
+    },
+    "oxlint": {
+      "initialization_options": {
+        "settings": {
+          "run": "onType",
+          "disableNestedConfig": false,
+          "fixKind": "safe_fix",
+          "typeAware": true,
+          "unusedDisableDirectives": "deny"
+        }
+      }
+    },
+    "oxfmt": {
+      "initialization_options": {
+        "settings": {
+          "run": "onSave"
+        }
+      }
+    }
   },
   "languages": {
+    "Shell Script": {
+      "format_on_save": "on",
+      "formatter": {
+        "external": {
+          "command": "shfmt",
+          "arguments": ["--filename", "{buffer_path}", "--indent", "2"]
+        }
+      }
+    },
     "Pkl": {
       "language_servers": ["pkl"]
     },
@@ -33,35 +85,23 @@
       "language_servers": ["tombi"],
       "show_edit_predictions": false,
       "formatter": {
-        "language_server": { "name": "tombi" }
-      }
-    },
-    "Python": {
-      "code_actions_on_format": {
-        "source.fixAll.ruff": true,
-        "source.organizeImports.ruff": true
-      },
-      "format_on_save": "on",
-      "language_servers": ["ruff", "pyrefly", "!pyright", "!pylsp"],
-      "formatter": {
         "language_server": {
-          "name": "ruff"
+          "name": "tombi"
         }
       }
     },
     "Markdown": {
+      "language_servers": [
+        "typescript-ls",
+        "!typescript-language-server",
+        "oxfmt",
+        "oxlint",
+        "markdown-oxide"
+      ],
       "format_on_save": "on",
-      "language_servers": ["oxfmt", "oxlint", "markdown-oxide"],
-      "formatter": [
-        {
-          "language_server": {
-            "name": "oxfmt"
-          }
-        }
-      ]
-    },
-    "YAML": {
-      "language_servers": ["oxfmt", "yaml-language-server"],
+      "prettier": {
+        "allowed": false
+      },
       "formatter": [
         {
           "language_server": {
@@ -73,6 +113,9 @@
     "JSON": {
       "format_on_save": "on",
       "language_servers": ["json-language-server", "oxfmt", "oxlint"],
+      "prettier": {
+        "allowed": false
+      },
       "formatter": [
         {
           "language_server": {
@@ -84,6 +127,80 @@
     "JSONC": {
       "format_on_save": "on",
       "language_servers": ["json-language-server", "oxfmt", "oxlint"],
+      "prettier": {
+        "allowed": false
+      },
+      "formatter": [
+        {
+          "language_server": {
+            "name": "oxfmt"
+          }
+        }
+      ]
+    },
+    "JSDoc": {
+      "language_servers": ["typescript-ls", "!typescript-language-server", "oxfmt", "oxlint"],
+      "format_on_save": "on",
+      "prettier": {
+        "allowed": false
+      },
+      "formatter": [
+        {
+          "language_server": {
+            "name": "oxfmt"
+          }
+        }
+      ]
+    },
+    "TSX": {
+      "format_on_save": "on",
+      "language_servers": ["typescript-ls", "!typescript-language-server", "oxfmt", "oxlint"],
+      "prettier": {
+        "allowed": false
+      },
+      "formatter": [
+        {
+          "language_server": {
+            "name": "oxfmt"
+          }
+        }
+      ]
+    },
+    "JavaScript": {
+      "format_on_save": "on",
+      "language_servers": ["typescript-ls", "!typescript-language-server", "oxfmt", "oxlint"],
+      "prettier": {
+        "allowed": false
+      },
+      "formatter": [
+        {
+          "language_server": {
+            "name": "oxfmt"
+          }
+        }
+      ]
+    },
+    "TypeScript": {
+      "format_on_save": "on",
+      "language_servers": ["typescript-ls", "!typescript-language-server", "oxfmt", "oxlint"],
+      "prettier": {
+        "allowed": false
+      },
+      "inlay_hints": { "enabled": false },
+      "formatter": [
+        {
+          "language_server": {
+            "name": "oxfmt"
+          }
+        }
+      ]
+    },
+    "YAML": {
+      "format_on_save": "on",
+      "language_servers": ["oxfmt", "oxlint"],
+      "prettier": {
+        "allowed": false
+      },
       "formatter": [
         {
           "language_server": {
@@ -92,71 +209,5 @@
         }
       ]
     }
-  },
-  "lsp": {
-    "ruff": {
-      "fetch": {
-        "pre_release": true
-      },
-      "initialization_options": {
-        "settings": {
-          "lineLength": 80,
-          "lint": {
-            "extendSelect": ["I"]
-          }
-        }
-      }
-    },
-    "pyrefly": {
-      "fetch": {
-        "pre_release": true
-      },
-      "binary": {
-        "arguments": ["lsp"]
-      }
-    },
-    "pkl": {
-      "fetch": { "pre_release": true },
-      "binary": { "ignore_system_version": false }
-    },
-    "tombi": {
-      "fetch": { "pre_release": true },
-      "binary": {
-        "arguments": ["lsp", "-v"],
-        "env": { "NO_COLOR": "true" },
-        "ignore_system_version": false
-      }
-    }
-  },
-  "hidden_files": [
-    "!**/_/**",
-    ".crush",
-    ".pi",
-    "**/.vscode",
-    "**/.git",
-    "**/.venv",
-    "**/__pycache__",
-    ".direnv",
-    ".ruff_cache",
-    ".DS_Store",
-    "result",
-    "**/.wrangler",
-    "**/.ruff_cache",
-    "**/*.egg-info"
-  ],
-  "file_scan_exclusions": [
-    ".crush",
-    ".direnv",
-    ".DS_Store",
-    "**/*.egg-info",
-    "result",
-    ".pi",
-    "**/.brew",
-    "**/.vscode",
-    "**/.git",
-    "**/.venv",
-    "**/.wrangler",
-    "**/.ruff_cache",
-    "**/__pycache__"
-  ]
+  }
 }
