@@ -5,7 +5,7 @@
     "JSONC": ["**/.zed/**/*.json"]
   },
   "hidden_files": ["**/.ruff_cache", "**/__pycache__/**"],
-  "file_scan_exclusions": [".git", "**/.vscode"],
+  "file_scan_exclusions": [".git", "**/.vscode", "**/.ruff_cache"],
   "use_autoclose": true,
   "enable_language_server": true,
   "formatter": "language_server",
@@ -17,17 +17,41 @@
     "pkl",
     "!eslint",
     "!biome",
+    "!typescript-language-server",
     "tombi",
     "oxfmt",
     "oxlint",
     "ruff",
     "pyrefly",
-    "markdown-oxide",
-    "json-language-server",
     "typescript-ls",
-    "!typescript-language-server"
+    "markdown-oxide",
+    "json-language-server"
   ],
   "lsp": {
+    "ruff": {
+      "fetch": { "pre_release": true },
+      "binary": {
+        "path": "./.venv/bin/ruff",
+        "arguments": ["server"]
+      },
+      "initialization_options": {
+        "settings": {
+          "configuration": "./pyproject.toml",
+          "lint": {
+            "extendSelect": ["I"]
+          }
+        }
+      }
+    },
+    "pyrefly": {
+      "fetch": {
+        "pre_release": true
+      },
+      "binary": {
+        "path": "./.venv/bin/pyrefly",
+        "arguments": ["lsp"]
+      }
+    },
     "pkl": {
       "fetch": {
         "pre_release": true
@@ -68,6 +92,19 @@
     }
   },
   "languages": {
+    "Python": {
+      "code_actions_on_format": {
+        "source.fixAll.ruff": true,
+        "source.organizeImports.ruff": true
+      },
+      "format_on_save": "on",
+      "language_servers": ["ruff", "pyrefly", "!pyright", "!pylsp"],
+      "formatter": {
+        "language_server": {
+          "name": "ruff"
+        }
+      }
+    },
     "Shell Script": {
       "format_on_save": "on",
       "formatter": {

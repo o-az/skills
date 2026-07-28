@@ -1,6 +1,6 @@
-amends "package://github.com/jdx/hk/releases/download/v1.51.0/hk@1.51.0#/Config.pkl"
+amends "package://github.com/jdx/hk/releases/download/v1.53.0/hk@1.53.0#/Config.pkl"
 
-import "package://github.com/jdx/hk/releases/download/v1.51.0/hk@1.51.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.53.0/hk@1.53.0#/Builtins.pkl"
 
 // https://hk.jdx.dev/configuration.html
 
@@ -34,9 +34,7 @@ local linters = new Mapping<String, Step> {
         ".github/workflows/*.yaml",
       )
   }
-  ["betterleaks"] = (Builtins.betterleaks) {
-    exclude = List("users/o/thaw/thaw.json")
-  }
+  ["betterleaks"] = Builtins.betterleaks
   ["gitleaks"] = (Builtins.gitleaks) {
     check =
       #"""
@@ -99,12 +97,12 @@ hooks {
     stash = "git"
     steps = allSteps
   }
-  // formatters only — `just fmt` / `hk fix --all`
+  // formatters only — `hk fix --all`
   ["fix"] {
     fix = true
     steps = formatters
   }
-  // linters only — `just lint` / `hk check --all`
+  // linters only — `hk check --all`
   ["check"] {
     steps = linters
   }

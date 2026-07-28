@@ -12,7 +12,6 @@ import subprocess
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
-
 CAPTION_STYLES = {"Default", "DarkOnLight", "Boxed"}
 
 
@@ -54,7 +53,7 @@ def probe_display_dimensions(video: Path) -> VideoDimensions:
     stream = streams[0]
     width, height = stream.get("width"), stream.get("height")
     if not isinstance(width, int) or not isinstance(height, int):
-        raise ValueError("Video dimensions are unavailable")
+        raise TypeError("Video dimensions are unavailable")
     if width <= 0 or height <= 0:
         raise ValueError("Video dimensions must be positive")
 

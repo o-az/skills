@@ -13,7 +13,6 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
 
-
 type Preferences = dict[str, str | int]
 
 

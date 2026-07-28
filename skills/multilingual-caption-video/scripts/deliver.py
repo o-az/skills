@@ -6,12 +6,12 @@
 # ///
 
 import argparse
+import datetime
 import os
 import re
 import shutil
 import sys
 import unicodedata
-from datetime import date
 from pathlib import Path
 
 LANGUAGE_CODE = re.compile(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})*")
@@ -84,7 +84,7 @@ def deliver_video(
     language: str,
     *,
     destination: Path | None = None,
-    today: date | None = None,
+    today: datetime.date | None = None,
 ) -> Path:
     video = video.resolve(strict=True)
     if not video.is_file() or video.suffix.lower() != ".mp4":
@@ -98,7 +98,11 @@ def deliver_video(
     if not destination.is_dir():
         raise ValueError("Delivery destination must be a directory")
 
-    day = date.today() if today is None else today
+    day = (
+        datetime.datetime.now(tz=datetime.UTC).date()
+        if today is None
+        else today
+    )
     base = (
         f"{day:%Y%m%d}-{sanitize_stem(original_name)}-"
         f"{normalized_language_code(language)}-subtitles"
