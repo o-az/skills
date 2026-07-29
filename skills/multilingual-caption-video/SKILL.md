@@ -218,13 +218,7 @@ DELIVERED="$(uv run --script "$SKILL_ROOT/scripts/deliver.py" "$WORK_DIR/caption
 
 The resulting name is `YYYYMMDD-<original-stem>-<language-code>-subtitles.mp4`. The script sanitizes the original stem and uses `-2`, `-3`, and so on when a name already exists; it never overwrites another file. It uses the Windows Downloads known folder with the Desktop as its Windows fallback, the configured XDG Downloads directory on Linux when available, and `~/Downloads` otherwise. If that directory cannot be created or written, report the issue and fall back to the platform's normal file-delivery or attachment capability from the work directory.
 
-For `url`, upload the generated MP4 to the configured video-capable host. When no uploader is configured, use `pstbn.dev`:
-
-```bash
-curl --fail-with-body --silent --show-error --request POST --form "file=@$WORK_DIR/captioned.mp4" https://pstbn.dev
-```
-
-Validate that an upload response is an HTTP(S) URL. Return only the requested delivery form unless the user asks for both. For file delivery, return the permanent path printed by `deliver.py`, not the temporary work-directory MP4. Include the target language, and do not claim completion without a successful probe and visual inspection.
+For file delivery, return the permanent path printed by `deliver.py`, not the temporary work-directory MP4. Include the target language, and do not claim completion without a successful probe and visual inspection.
 
 In the successful result, tell the user: “I used font <FONT>, which was available on your system. If you'd like to use a different font or size, or another subtitle style, let me know.” Substitute the actual selected font name.
 

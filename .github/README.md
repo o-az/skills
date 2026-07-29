@@ -47,10 +47,15 @@ cp -R _template skills/<new-skill-name>
 
 1. Edit `skills/<new-skill-name>/SKILL.md` with the new Skill's name and description
 2. Add Skill dependencies to `skills/<new-skill-name>/scripts`
-   > See scripts in [`skills/screencast`](/skills/screencast) for a skill dependency example
+   > See scripts in [`skills/multilingual-caption-video`](/skills/multilingual-caption-video) for a skill dependency example
    > Most Skills won't have dependencies.
 
 #### More on `skills`
 
 - Specification: [agentskills.io/specification](https:/agentskills.io/specification)
 - `skills` CLI: [skills.sh/docs/cli](https://skills.sh/docs/cli)
+
+<!--
+TODO:
+- add pastebin upload option to `multilingual-caption-video`
+-->
