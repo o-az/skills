@@ -4,7 +4,7 @@ Hand-crafted [skills](https://skills.sh) for agents, built from workflows I kept
 
 | Skill                                                            | What it does                                                                                                                                                                            |
 | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [multilingual-caption-video](/skills/multilingual-caption-video) | Transcribe and translate local or URL videos, burn adaptive multilingual captions, verify the result, and deliver the finished MP4 locally or by shareable link.                        |
+| [multilingual-caption-video](/skills/multilingual-caption-video) | Transcribe and translate local or URL videos, burn adaptive multilingual captions, verify the result, and deliver the finished MP4 locally.                                             |
 | [manipulating-video](/skills/manipulating-video)                 | Manipulate video files with [`ffmpeg`](https://github.com/ffmpeg/ffmpeg) — speed up/slow down, resize, compress, convert formats, extract audio, convert to GIF, trim, merge, and more. |
 | [upload-image](/skills/upload-image)                             | Uploads images to [imgbb](https://ibb.co) — local files, URLs, SVGs, base64, whatever. No more manual hosting.                                                                          |
 | [terminal-recording](/skills/terminal-recording)                 | Record, upload, and GIF-convert terminal sessions with [`asciinema`](https://github.com/asciinema/asciinema) and [`agg`](https://github.com/asciinema/agg).                             |
@@ -47,10 +47,15 @@ cp -R _template skills/<new-skill-name>
 
 1. Edit `skills/<new-skill-name>/SKILL.md` with the new Skill's name and description
 2. Add Skill dependencies to `skills/<new-skill-name>/scripts`
-   > See scripts in [`skills/screencast`](/skills/screencast) for a skill dependency example
+   > See scripts in [`skills/multilingual-caption-video`](/skills/multilingual-caption-video) for a skill dependency example
    > Most Skills won't have dependencies.
 
 #### More on `skills`
 
 - Specification: [agentskills.io/specification](https:/agentskills.io/specification)
 - `skills` CLI: [skills.sh/docs/cli](https://skills.sh/docs/cli)
+
+<!--
+TODO:
+- add pastebin upload option to `multilingual-caption-video`
+-->

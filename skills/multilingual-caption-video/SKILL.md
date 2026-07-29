@@ -1,8 +1,8 @@
 ---
 name: multilingual-caption-video
-description: "Burn translated captions into a local video or video URL and deliver the finished MP4 as a file or shareable link. Use when a user asks to subtitle, caption, translate, or hardcode subtitles into a video in a specified language."
+description: "Burn translated captions into a local video or video URL and deliver the finished MP4 as a local file. Use when a user asks to subtitle, caption, translate, or hardcode subtitles into a video in a specified language."
 license: "GPL-3.0-or-Later"
-compatibility: Requires uv and FFmpeg with libass and libx264 support. URL delivery requires a platform uploader or curl.
+compatibility: Requires uv and FFmpeg with libass and libx264 support.
 metadata:
   author: o-az
   version: "1.1.1"
@@ -10,14 +10,13 @@ metadata:
 
 # multilingual-caption-video
 
-Transcribe the video's spoken language, translate the timestamped transcript into the requested language, burn readable subtitles into a new MP4, verify the result, and deliver either the file or a shareable URL.
+Transcribe the video's spoken language, translate the timestamped transcript into the requested language, burn readable subtitles into a new MP4, verify the result, and deliver the local file.
 
 ## Requirements
 
 - `uv`
 - FFmpeg with libass and libx264 support
-- A platform upload capability or `curl` only when URL delivery is requested
-- Network access for the transcription model, URL downloads, and uploads
+- Network access for the transcription model and URL downloads
 
 Every bundled Python entrypoint has PEP 723 inline script metadata, requires Python 3.12 or newer, and must be invoked with `uv run --script`. Scripts that use only the standard library declare `dependencies = []`; the download and transcription scripts pin their third-party dependencies. `uv run --script` selects a compatible Python interpreter and creates an isolated cached environment without using or modifying the caller's Python project. No global `yt-dlp` or `faster-whisper` installation is required. The transcription helper uses `faster-whisper==1.2.1` with the multilingual Whisper `base` model and downloads the model into the normal Hugging Face cache on first use.
 
@@ -45,7 +44,7 @@ Run any Python script with `uv run --script <script> --help` so uv honors its de
 - Keep each caption concise, on screen long enough to read, and at no more than two lines.
 - When neither the request nor saved preferences specify a size, let `scripts/make_ass.py` scale it from the video dimensions. Always honor an explicit user choice.
 - Use an installed medium-weight sans-serif font that covers the target script. For Latin text, prefer Arial, Helvetica, Roboto, DejaVu Sans, or Liberation Sans. For Arabic, prefer Arial, Noto Sans Arabic, Geeza Pro, SF Arabic, or another installed Arabic-capable sans-serif.
-- Deliver only the generated MP4. A request for a URL authorizes uploading that generated file, not unrelated local files.
+- Deliver only the generated MP4.
 - Write preferences only after explicit consent. An explicit request always overrides a saved preference for that job.
 - Delete only marked working directories created by `scripts/cleanup.py`.
 - Run bundled scripts as the current unprivileged user. Never invoke them through `sudo` or another privilege-elevation mechanism.
@@ -89,14 +88,14 @@ Resolve the directory containing this `SKILL.md` as `SKILL_ROOT`, then inspect s
 uv run --script "$SKILL_ROOT/scripts/preferences.py" show
 ```
 
-Preferences live at `$XDG_CONFIG_HOME/multilingual-caption-video/preferences.json` when `XDG_CONFIG_HOME` is an absolute path, or `~/.config/multilingual-caption-video/preferences.json` otherwise. The file may contain `delivery`, `language`, `font`, and `font_size`.
+Preferences live at `$XDG_CONFIG_HOME/multilingual-caption-video/preferences.json` when `XDG_CONFIG_HOME` is an absolute path, or `~/.config/multilingual-caption-video/preferences.json` otherwise. The file may contain `language`, `font`, and `font_size`.
 
-Resolve each setting in this order: the current request, a saved preference, then the documented default. If neither the request nor saved preferences specify `delivery`, ask whether the user wants the finished video as a file or URL. If neither specifies the target language, ask for it. Do not infer either choice.
+Resolve each setting in this order: the current request, a saved preference, then the documented default. If neither the request nor saved preferences specify the target language, ask for it. Do not infer it.
 
 Ask whether the user wants the resolved choices saved for future jobs. Save only the fields the user explicitly consents to persist:
 
 ```bash
-uv run --script "$SKILL_ROOT/scripts/preferences.py" set --delivery file --language Arabic --font-size 35
+uv run --script "$SKILL_ROOT/scripts/preferences.py" set --language Arabic --font-size 35
 ```
 
 If the user declines, do not write the preferences file. Ask again on future jobs whenever a required choice is absent.
@@ -208,9 +207,9 @@ Before sending each preview to an image or vision tool, check its byte size agai
 
 Confirm that captions are present, correctly shaped, legible, inside the safe area, and no more than two lines; adaptive text or background colors remain readable without flickering within a cue; video and audio both play; duration and displayed dimensions match the source; and the source remains unchanged. Fix the caption data or style and render again when verification fails.
 
-### 9. Deliver the requested form
+### 9. Deliver the file
 
-For `file`, copy the verified MP4 to the operating system's Downloads directory, then deliver that permanent file without uploading it. Pass the local source's original path or the downloaded source's yt-dlp-derived path as `<ORIGINAL_NAME>`, and use the target language's lowercase ISO or BCP 47 code for `<LANGUAGE_CODE>`:
+Copy the verified MP4 to the operating system's Downloads directory, then deliver that permanent file without uploading it. Pass the local source's original path or the downloaded source's yt-dlp-derived path as `<ORIGINAL_NAME>`, and use the target language's lowercase ISO or BCP 47 code for `<LANGUAGE_CODE>`:
 
 ```bash
 DELIVERED="$(uv run --script "$SKILL_ROOT/scripts/deliver.py" "$WORK_DIR/captioned.mp4" "<ORIGINAL_NAME>" "<LANGUAGE_CODE>")"
@@ -218,13 +217,7 @@ DELIVERED="$(uv run --script "$SKILL_ROOT/scripts/deliver.py" "$WORK_DIR/caption
 
 The resulting name is `YYYYMMDD-<original-stem>-<language-code>-subtitles.mp4`. The script sanitizes the original stem and uses `-2`, `-3`, and so on when a name already exists; it never overwrites another file. It uses the Windows Downloads known folder with the Desktop as its Windows fallback, the configured XDG Downloads directory on Linux when available, and `~/Downloads` otherwise. If that directory cannot be created or written, report the issue and fall back to the platform's normal file-delivery or attachment capability from the work directory.
 
-For `url`, upload the generated MP4 to the configured video-capable host. When no uploader is configured, use `pstbn.dev`:
-
-```bash
-curl --fail-with-body --silent --show-error --request POST --form "file=@$WORK_DIR/captioned.mp4" https://pstbn.dev
-```
-
-Validate that an upload response is an HTTP(S) URL. Return only the requested delivery form unless the user asks for both. For file delivery, return the permanent path printed by `deliver.py`, not the temporary work-directory MP4. Include the target language, and do not claim completion without a successful probe and visual inspection.
+Return the permanent path printed by `deliver.py`, not the temporary work-directory MP4. Include the target language, and do not claim completion without a successful probe and visual inspection.
 
 In the successful result, tell the user: “I used font <FONT>, which was available on your system. If you'd like to use a different font or size, or another subtitle style, let me know.” Substitute the actual selected font name.
 

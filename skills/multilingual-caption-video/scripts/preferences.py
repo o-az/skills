@@ -26,15 +26,10 @@ def default_preferences_path() -> Path:
 
 
 def validate_preferences(preferences: Mapping[str, object]) -> Preferences:
-    allowed = {"delivery", "font", "font_size", "language"}
+    allowed = {"font", "font_size", "language"}
     unknown = set(preferences) - allowed
     if unknown:
         raise ValueError(f"Unknown preferences: {', '.join(sorted(unknown))}")
-    if "delivery" in preferences and preferences["delivery"] not in {
-        "file",
-        "url",
-    }:
-        raise ValueError("delivery must be 'file' or 'url'")
     if "font_size" in preferences and (
         not isinstance(preferences["font_size"], int)
         or isinstance(preferences["font_size"], bool)
@@ -56,7 +51,10 @@ def load_preferences(path: Path | None = None) -> Preferences:
         serialized = path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return {}
-    return validate_preferences(json.loads(serialized))
+    preferences = json.loads(serialized)
+    if isinstance(preferences, dict):
+        preferences.pop("delivery", None)
+    return validate_preferences(preferences)
 
 
 def save_preferences(
@@ -92,7 +90,6 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("show")
     set_parser = subparsers.add_parser("set")
-    set_parser.add_argument("--delivery", choices=("file", "url"))
     set_parser.add_argument("--language")
     set_parser.add_argument("--font")
     set_parser.add_argument("--font-size", type=int)
@@ -104,7 +101,6 @@ def main() -> None:
         preferences = {
             key: value
             for key, value in {
-                "delivery": args.delivery,
                 "language": args.language,
                 "font": args.font,
                 "font_size": args.font_size,

@@ -2,11 +2,11 @@
   "skill_name": "multilingual-caption-video",
   "evals": [
     {
-      "id": "english-url-to-arabic-url",
-      "prompt": "Add Arabic captions to this English video and send me the finished MP4 link: https://example.com/video.mp4",
-      "expected_output": "A verified MP4 with burned-in Arabic captions delivered as a shareable URL.",
+      "id": "english-url-to-arabic-file",
+      "prompt": "Add Arabic captions to this English video: https://example.com/video.mp4",
+      "expected_output": "A verified MP4 with burned-in Arabic captions delivered as a local file.",
       "assertions": [
-        "Uses the explicitly requested Arabic language and URL delivery without asking for those choices again",
+        "Uses the explicitly requested Arabic language without asking for it again",
         "Asks whether the user wants the current choices persisted before writing preferences",
         "Announces end-to-end processing once and avoids routine progress updates unless the user opts in",
         "Downloads only the requested video without a playlist through the bundled uv-managed yt-dlp Python API rather than a global yt-dlp executable",
@@ -14,18 +14,17 @@
         "Selects an installed Arabic-capable font using operating-system-appropriate discovery",
         "Samples the subtitle region at multiple points per cue and selects one stable high-contrast or translucent-background style for that cue",
         "Checks preview byte size against the vision tool limit and resizes or recompresses it before inspection when necessary",
-        "Visually inspects the rendered captions before uploading",
-        "Returns an HTTP(S) link to the generated MP4",
+        "Visually inspects the rendered captions before delivery",
+        "Copies the generated MP4 to the operating system's Downloads directory",
         "Reports the actual font used and offers font, size, or subtitle-style changes",
         "Announces and schedules cleanup only after successful delivery"
       ]
     },
     {
-      "id": "non-english-local-missing-delivery",
+      "id": "non-english-local",
       "prompt": "Take /tmp/spanish-interview.mov and add Arabic subtitles.",
-      "expected_output": "The agent asks whether to deliver a file or URL, then produces a verified MP4 preserving the Spanish video's timing and audio with readable Arabic captions.",
+      "expected_output": "The agent produces a locally delivered, verified MP4 preserving the Spanish video's timing and audio with readable Arabic captions.",
       "assertions": [
-        "Asks for file or URL delivery when neither the request nor saved preferences specify it",
         "Does not overwrite or delete the local source file",
         "Transcribes the non-English source with the multilingual model",
         "Uses the requested or saved font size when present; otherwise scales the default from the video dimensions",
