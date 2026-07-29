@@ -401,19 +401,21 @@ finally:
 with tempfile.TemporaryDirectory() as temporary_directory:
     preferences_path = Path(temporary_directory) / "preferences.json"
     assert load_preferences(preferences_path) == {}
+    preferences_path.write_text('{"delivery": "url", "language": "Arabic"}\n')
+    assert load_preferences(preferences_path) == {"language": "Arabic"}
     saved = save_preferences(
-        {"delivery": "url", "language": "Arabic", "font_size": 35},
+        {"language": "Arabic", "font_size": 35},
         preferences_path,
     )
-    assert saved == {"delivery": "url", "font_size": 35, "language": "Arabic"}
+    assert saved == {"font_size": 35, "language": "Arabic"}
     assert json.loads(preferences_path.read_text()) == saved
 
     try:
-        save_preferences({"delivery": "email"}, preferences_path)
+        save_preferences({"delivery": "url"}, preferences_path)
     except ValueError as error:
         assert "delivery" in str(error)
     else:
-        raise AssertionError("Unsupported delivery preference should fail")
+        raise AssertionError("Removed delivery preference should fail")
 
     victim_path = Path(temporary_directory) / "victim.txt"
     victim_path.write_text("unchanged\n")
