@@ -5,7 +5,7 @@ license: "GPL-3.0-or-Later"
 compatibility: Requires uv and FFmpeg with libass and libx264 support.
 metadata:
   author: o-az
-  version: "1.1.1"
+  version: "1.2.0"
 ---
 
 # multilingual-caption-video
@@ -27,7 +27,7 @@ Every bundled Python entrypoint has PEP 723 inline script metadata, requires Pyt
 - `scripts/transcribe.py` detects the spoken language, transcribes the video, and emits timestamped JSON.
 - `scripts/style_captions.py` samples the future subtitle band and selects a readable, stable style for each cue.
 - `scripts/make_ass.py` converts translated caption JSON into styled ASS subtitles.
-- `scripts/deliver.py` copies a verified MP4 to the operating system's Downloads directory using a safe, collision-free filename.
+- `scripts/deliver.py` copies a verified MP4 to the operating system's Downloads directory using a short, collision-free language-code/timestamp filename.
 - `scripts/preferences.py` reads and, only with explicit user consent, saves sparse JSON preferences.
 - `scripts/cleanup.py` creates marked work directories and safely schedules or cancels their deletion.
 
@@ -116,13 +116,15 @@ For a local file, resolve its absolute path and verify it is a regular video fil
 SOURCE="$(uv run --script "$SKILL_ROOT/scripts/download.py" "<VIDEO_URL>" "$WORK_DIR")"
 ```
 
-For URLs whose path ends in `.mp4` or `.mov`, the downloader streams the response directly and validates each redirect host. For other URLs, it validates the initial page host and delegates to yt-dlp with playlists and live streams disabled. Platform extraction is best-effort and may fail when a site is unsupported, requires authentication, or changes its interface. Both paths write only inside the marked work directory and report the final local path. Platform downloads retain yt-dlp's title and media ID so file delivery can derive a meaningful original stem. Probe the source:
+For URLs whose path ends in `.mp4` or `.mov`, the downloader streams the response directly and validates each redirect host. For other URLs, it validates the initial page host and delegates to yt-dlp with playlists and live streams disabled. Platform extraction is best-effort and may fail when a site is unsupported, requires authentication, or changes its interface. Both paths write only inside the marked work directory and report the final local path. Platform downloads retain yt-dlp's title and media ID. Probe the source, including any existing title metadata:
 
 ```bash
-ffprobe -v error -show_entries format=duration:stream=codec_type,codec_name,width,height:stream_side_data=rotation -of json "<SOURCE>"
+ffprobe -v error -show_entries format=duration:format_tags=title:stream=codec_type,codec_name,width,height:stream_side_data=rotation -of json "<SOURCE>"
 ```
 
 Stop with a clear error when the source has no video stream or no audio stream.
+
+Resolve `ORIGINAL_TITLE` for the output metadata. Prefer a non-empty `format.tags.title` from the probe. Otherwise use the local source filename stem, the decoded direct-URL filename stem, or the yt-dlp title in the downloaded filename with its final ` [<media-id>]` removed. Preserve spaces, emoji, and other Unicode in this metadata value; do not include it in the delivered filename.
 
 ### 4. Detect the source language and transcribe
 
@@ -180,11 +182,11 @@ The default ASS region uses 12 pixels of padding on each horizontal edge, so wra
 
 ### 7. Burn captions into a new MP4
 
-Run `ffmpeg` from the work directory so the subtitle filter receives a simple path:
+Run `ffmpeg` from the work directory so the subtitle filter receives a simple path. Add the original video title to the MP4 `title` metadata field:
 
 ```bash
 cd "$WORK_DIR"
-ffmpeg -y -i "<SOURCE>" -vf "ass=captions.ass" -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k -movflags +faststart captioned.mp4
+ffmpeg -y -i "<SOURCE>" -vf "ass=captions.ass" -c:v libx264 -crf 18 -preset medium -c:a aac -b:a 192k -metadata "title=$ORIGINAL_TITLE" -movflags +faststart captioned.mp4
 ```
 
 ### 8. Verify visually and structurally
@@ -192,7 +194,7 @@ ffmpeg -y -i "<SOURCE>" -vf "ass=captions.ass" -c:v libx264 -crf 18 -preset medi
 Probe the result and compare its duration and displayed dimensions with the source:
 
 ```bash
-ffprobe -v error -show_entries format=duration:stream=codec_type,codec_name,width,height:stream_side_data=rotation -of json "$WORK_DIR/captioned.mp4"
+ffprobe -v error -show_entries format=duration:format_tags=title:stream=codec_type,codec_name,width,height:stream_side_data=rotation -of json "$WORK_DIR/captioned.mp4"
 ```
 
 Account for display rotation when comparing dimensions. FFmpeg normally autorotates and normalizes a rotated input while rendering, so a source stored as `1920x1080` with a 90-degree display matrix correctly becomes a `1080x1920` output without that matrix. Treat those as matching displayed dimensions.
@@ -205,17 +207,17 @@ ffmpeg -y -ss <SPEECH_TIMESTAMP> -i "$WORK_DIR/captioned.mp4" -frames:v 1 -vf "s
 
 Before sending each preview to an image or vision tool, check its byte size against that tool's upload limit. If the limit is unknown, keep the preview below 1 MiB. If it is too large, reduce the dimensions or JPEG quality, then check again; never invoke the inspection tool with a known-oversized image.
 
-Confirm that captions are present, correctly shaped, legible, inside the safe area, and no more than two lines; adaptive text or background colors remain readable without flickering within a cue; video and audio both play; duration and displayed dimensions match the source; and the source remains unchanged. Fix the caption data or style and render again when verification fails.
+Confirm that captions are present, correctly shaped, legible, inside the safe area, and no more than two lines; adaptive text or background colors remain readable without flickering within a cue; video and audio both play; duration and displayed dimensions match the source; the output `title` metadata equals `ORIGINAL_TITLE`; and the source remains unchanged. Fix the caption data or style and render again when verification fails.
 
 ### 9. Deliver the file
 
-Copy the verified MP4 to the operating system's Downloads directory, then deliver that permanent file without uploading it. Pass the local source's original path or the downloaded source's yt-dlp-derived path as `<ORIGINAL_NAME>`, and use the target language's lowercase ISO or BCP 47 code for `<LANGUAGE_CODE>`:
+Copy the verified MP4 to the operating system's Downloads directory, then deliver that permanent file without uploading it. Use the target language's lowercase ISO or BCP 47 code for `<LANGUAGE_CODE>`:
 
 ```bash
-DELIVERED="$(uv run --script "$SKILL_ROOT/scripts/deliver.py" "$WORK_DIR/captioned.mp4" "<ORIGINAL_NAME>" "<LANGUAGE_CODE>")"
+DELIVERED="$(uv run --script "$SKILL_ROOT/scripts/deliver.py" "$WORK_DIR/captioned.mp4" "<LANGUAGE_CODE>")"
 ```
 
-The resulting name is `YYYYMMDD-<original-stem>-<language-code>-subtitles.mp4`. The script sanitizes the original stem and uses `-2`, `-3`, and so on when a name already exists; it never overwrites another file. It uses the Windows Downloads known folder with the Desktop as its Windows fallback, the configured XDG Downloads directory on Linux when available, and `~/Downloads` otherwise. If that directory cannot be created or written, report the issue and fall back to the platform's normal file-delivery or attachment capability from the work directory.
+The resulting name is `<language-code>_YYYY-MM-DD_HH.mm.ss.mp4`, using the local delivery time, for example `es_2026-07-31_02.52.58.mp4`. If that exact second already exists, the script advances the filename timestamp one second at a time until an unused name is available; it never overwrites another file. It uses the Windows Downloads known folder with the Desktop as its Windows fallback, the configured XDG Downloads directory on Linux when available, and `~/Downloads` otherwise. If that directory cannot be created or written, report the issue and fall back to the platform's normal file-delivery or attachment capability from the work directory.
 
 Return the permanent path printed by `deliver.py`, not the temporary work-directory MP4. Include the target language, and do not claim completion without a successful probe and visual inspection.
 

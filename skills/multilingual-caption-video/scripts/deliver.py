@@ -11,7 +11,6 @@ import os
 import re
 import shutil
 import sys
-import unicodedata
 from pathlib import Path
 
 LANGUAGE_CODE = re.compile(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})*")
@@ -56,21 +55,6 @@ def default_downloads_directory() -> Path:
     return Path.home() / "Downloads"
 
 
-def sanitize_stem(original_name: str) -> str:
-    basename = original_name.replace("\\", "/").rsplit("/", 1)[-1]
-    stem = Path(basename).stem
-    normalized = unicodedata.normalize("NFKC", stem)
-    cleaned = "".join(
-        "-"
-        if char in '<>:"/\\|?*' or unicodedata.category(char)[0] == "C"
-        else char
-        for char in normalized
-    )
-    cleaned = re.sub(r"\s+", "-", cleaned)
-    cleaned = re.sub(r"-+", "-", cleaned).strip(" .-")
-    return cleaned[:120].rstrip(" .-") or "video"
-
-
 def normalized_language_code(language: str) -> str:
     code = language.strip().replace("_", "-").lower()
     if not LANGUAGE_CODE.fullmatch(code):
@@ -80,11 +64,10 @@ def normalized_language_code(language: str) -> str:
 
 def deliver_video(
     video: Path,
-    original_name: str,
     language: str,
     *,
     destination: Path | None = None,
-    today: datetime.date | None = None,
+    timestamp: datetime.datetime | None = None,
 ) -> Path:
     video = video.resolve(strict=True)
     if not video.is_file() or video.suffix.lower() != ".mp4":
@@ -98,18 +81,17 @@ def deliver_video(
     if not destination.is_dir():
         raise ValueError("Delivery destination must be a directory")
 
-    day = (
-        datetime.datetime.now(tz=datetime.UTC).date()
-        if today is None
-        else today
+    delivered_at = (
+        datetime.datetime.now().astimezone() if timestamp is None else timestamp
     )
-    base = (
-        f"{day:%Y%m%d}-{sanitize_stem(original_name)}-"
-        f"{normalized_language_code(language)}-subtitles"
-    )
-    for number in range(1, 10_000):
-        suffix = "" if number == 1 else f"-{number}"
-        output = destination / f"{base}{suffix}.mp4"
+    language_code = normalized_language_code(language)
+    for second_offset in range(10_000):
+        candidate_time = delivered_at + datetime.timedelta(
+            seconds=second_offset
+        )
+        output = destination / (
+            f"{language_code}_{candidate_time:%Y-%m-%d_%H.%M.%S}.mp4"
+        )
         try:
             descriptor = os.open(
                 output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644
@@ -134,14 +116,12 @@ def main() -> None:
         description="Copy a verified captioned MP4 to the Downloads directory."
     )
     parser.add_argument("video", type=Path)
-    parser.add_argument("original_name")
     parser.add_argument("language", help="ISO or BCP 47 language code")
     parser.add_argument("--destination", type=Path)
     args = parser.parse_args()
     print(
         deliver_video(
             args.video,
-            args.original_name,
             args.language,
             destination=args.destination,
         )
