@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from datetime import date
+from datetime import UTC, datetime
 from http.client import HTTPMessage
 from pathlib import Path
 from types import SimpleNamespace
@@ -33,7 +33,6 @@ from deliver import (
     default_downloads_directory,
     deliver_video,
     normalized_language_code,
-    sanitize_stem,
 )
 from download import (
     LiveStreamFilter,
@@ -310,8 +309,6 @@ with tempfile.TemporaryDirectory() as temporary_directory:
         direct_download.assert_not_called()
         platform_download.assert_called_once()
 
-assert sanitize_stem("/tmp/My unsafe: video?.mov") == "My-unsafe-video"
-assert sanitize_stem(r"C:\Videos\قصيدة جميلة.mp4") == "قصيدة-جميلة"
 assert normalized_language_code("EN_us") == "en-us"
 try:
     normalized_language_code("English")
@@ -339,21 +336,19 @@ with tempfile.TemporaryDirectory() as temporary_directory:
     downloads = delivery_directory / "Downloads"
     delivered = deliver_video(
         rendered,
-        "/tmp/My Interview.mov",
         "AR",
         destination=downloads,
-        today=date(2026, 7, 21),
+        timestamp=datetime(2026, 7, 31, 2, 52, 58, tzinfo=UTC),
     )
-    assert delivered.name == "20260721-My-Interview-ar-subtitles.mp4"
+    assert delivered.name == "ar_2026-07-31_02.52.58.mp4"
     assert delivered.read_bytes() == b"video"
     duplicate = deliver_video(
         rendered,
-        "/tmp/My Interview.mov",
         "ar",
         destination=downloads,
-        today=date(2026, 7, 21),
+        timestamp=datetime(2026, 7, 31, 2, 52, 58, tzinfo=UTC),
     )
-    assert duplicate.name == "20260721-My-Interview-ar-subtitles-2.mp4"
+    assert duplicate.name == "ar_2026-07-31_02.52.59.mp4"
     assert delivered.read_bytes() == b"video"
 
 cleanup_script = SCRIPTS / "cleanup.py"

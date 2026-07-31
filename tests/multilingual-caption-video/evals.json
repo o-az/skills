@@ -15,6 +15,7 @@
         "Samples the subtitle region at multiple points per cue and selects one stable high-contrast or translucent-background style for that cue",
         "Checks preview byte size against the vision tool limit and resizes or recompresses it before inspection when necessary",
         "Visually inspects the rendered captions before delivery",
+        "Stores the original video title in the delivered MP4 title metadata instead of its filename",
         "Copies the generated MP4 to the operating system's Downloads directory",
         "Reports the actual font used and offers font, size, or subtitle-style changes",
         "Announces and schedules cleanup only after successful delivery"
@@ -32,7 +33,7 @@
         "Uses a single low-resolution video pass to assign stable per-cue styles based on the subtitle region's luminance and variation",
         "Keeps visual-inspection previews below the image tool's upload-size limit",
         "Probes and visually checks the final MP4 before delivery",
-        "Copies file deliveries to the operating system's Downloads directory with a sanitized YYYYMMDD-original-stem-language-code-subtitles.mp4 name without overwriting an existing file",
+        "Copies file deliveries to the operating system's Downloads directory with a lowercase language-code_YYYY-MM-DD_HH.mm.ss.mp4 name without overwriting an existing file",
         "Reports the selected font and offers font, size, or subtitle-style changes",
         "Deletes only the marked generated work directory after the cleanup grace period while retaining the delivered Downloads file"
       ]
