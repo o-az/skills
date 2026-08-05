@@ -37,6 +37,19 @@ Install all skills:
 npx skills@latest add o-az/skills --all
 ```
 
+## Amp plugins
+
+### Ponytail
+
+The [Ponytail plugin](/plugins#ponytail) adds always-on, mode-aware
+[Ponytail](https://github.com/dietrichgebert/ponytail) support to Amp:
+
+```bash
+mkdir -p ~/.config/amp/plugins
+curl -fsSL https://raw.githubusercontent.com/o-az/skills/main/plugins/ponytail.ts \
+  -o ~/.config/amp/plugins/ponytail.ts
+```
+
 ## Contributing a new Skill
 
 0. Copy skill template

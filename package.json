@@ -17,6 +17,7 @@
     "validate-skills": "bash -c 'for dir in skills/*/; do uvx --from skills-ref agentskills validate $dir; done'"
   },
   "devDependencies": {
+    "@ampcode/plugin": "^0.0.0-20260805002929-g5b1c43a",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
     "oxlint-tsgolint": "^7.0.2001",

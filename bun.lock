@@ -5,6 +5,7 @@
     "": {
       "name": "skills",
       "devDependencies": {
+        "@ampcode/plugin": "^0.0.0-20260805002929-g5b1c43a",
         "oxfmt": "^0.61.0",
         "oxlint": "^1.76.0",
         "oxlint-tsgolint": "^7.0.2001",
@@ -13,6 +14,8 @@
     },
   },
   "packages": {
+    "@ampcode/plugin": ["@ampcode/plugin@0.0.0-20260805002929-g5b1c43a", "", {}, "sha512-+0jQrtXyKWupvoEfeDw+1TWqVWmjjyv9Ovpc9FmQq5iR1nrXpoeLKsBv16KS7O5q51eNvECkZhbX9K5nybH51g=="],
+
     "@oxfmt/binding-android-arm-eabi": ["@oxfmt/binding-android-arm-eabi@0.61.0", "", { "os": "android", "cpu": "arm" }, "sha512-BaS+1OVvg9sr+Xav0+KdWedQRcAzrdoEcwMZeqoc2F6ieC1s/t5eM35YQoRPQ7vAqkZ+p3tbQb1r9I9mrV5oGA=="],
 
     "@oxfmt/binding-android-arm64": ["@oxfmt/binding-android-arm64@0.61.0", "", { "os": "android", "cpu": "arm64" }, "sha512-of8atAV0M1egGcVOMbgZCvc10sFOP3ayQBNQV5h5G3fNq8gACdEswfFk9bzGrdbM23rtg0Coxi7np7oPLcueNw=="],
