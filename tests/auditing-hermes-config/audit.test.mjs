@@ -263,7 +263,7 @@ test("target resolution, tracked discipline, exact revision, cache and output bo
     for (const p of [f.source, f.target, f.src.cache, cache])
       fs.rmSync(p, { recursive: true, force: true });
   });
-  assert.equal(resolveTarget({ "target-repo": f.target }).root, f.target);
+  assert.equal(resolveTarget({ "target-repo": f.target }).root, fs.realpathSync(f.target));
   assert.throws(() => resolveTarget({ "target-repo": f.target, repo: f.source }), /conflict/);
   assert.equal(resolveSource(f.target, { source: f.source, cache }, [f.target, skill]).sha, f.sha);
   git(f.source, "commit", "--allow-empty", "-qm", "mismatch");
