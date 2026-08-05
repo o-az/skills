@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/hermes-config-audit.schema.json",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "command",
+    "generatedAt",
+    "readOnly",
+    "provenance",
+    "surfaces",
+    "findings",
+    "moduleSummary",
+    "limits",
+    "safety"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 4 },
+    "command": { "const": "audit" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "readOnly": { "const": true },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "selection",
+        "lockedSha",
+        "resolvedSha",
+        "owner",
+        "repo",
+        "targetRepo",
+        "targetDirty",
+        "host"
+      ],
+      "properties": {
+        "selection": { "enum": ["locked", "latest"] },
+        "lockedSha": { "$ref": "#/$defs/sha" },
+        "resolvedSha": { "$ref": "#/$defs/sha" },
+        "owner": { "type": "string", "minLength": 1 },
+        "repo": { "type": "string", "minLength": 1 },
+        "targetRepo": { "type": "string", "minLength": 1 },
+        "targetDirty": { "type": "boolean" },
+        "host": { "type": "string", "minLength": 1 },
+        "resolvedAt": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "selection": { "const": "latest" } } },
+          "then": { "required": ["resolvedAt"] }
+        }
+      ]
+    },
+    "surfaces": {
+      "type": "object",
+      "required": ["runtime", "module", "host"],
+      "properties": {
+        "runtime": {
+          "type": "object",
+          "required": ["contracts", "defaultCount"],
+          "properties": {
+            "contracts": { "type": "object" },
+            "defaultCount": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "module": {
+          "type": "object",
+          "required": [
+            "source",
+            "optionCount",
+            "options",
+            "completeness",
+            "diagnostics",
+            "generation"
+          ],
+          "properties": {
+            "source": { "type": "string" },
+            "optionCount": { "type": "integer" },
+            "options": { "type": "array", "items": { "$ref": "#/$defs/option" } },
+            "completeness": { "type": "string" },
+            "diagnostics": { "type": "array", "items": { "type": "string" } },
+            "generation": { "type": "object" }
+          }
+        },
+        "host": {
+          "type": "object",
+          "required": [
+            "host",
+            "provenance",
+            "evaluated",
+            "runtimeDocument",
+            "moduleValues",
+            "localAssignments",
+            "mode",
+            "settingsEmpty",
+            "configFileBypassesSettings",
+            "limits"
+          ]
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "moduleSummary": {
+      "type": "object",
+      "required": ["effectiveTopLevelValues", "optionCoverage"],
+      "properties": {
+        "effectiveTopLevelValues": { "type": "array" },
+        "optionCoverage": { "const": "unavailable" }
+      }
+    },
+    "limits": { "type": "array", "items": { "type": "string" } },
+    "safety": { "type": "object", "required": ["performed", "forbidden"] }
+  },
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "evidence": {
+      "type": "object",
+      "required": ["source", "line", "url", "excerpt"],
+      "properties": {
+        "source": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "url": { "type": "string" },
+        "excerpt": { "type": "string" }
+      }
+    },
+    "option": {
+      "type": "object",
+      "required": [
+        "path",
+        "typeExpression",
+        "default",
+        "example",
+        "description",
+        "declaration",
+        "mappingEvidence"
+      ],
+      "properties": {
+        "path": { "type": "string" },
+        "typeExpression": { "type": ["string", "null"] },
+        "declaration": { "$ref": "#/$defs/evidence" },
+        "mappingEvidence": { "type": "array" }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["path", "classification", "reason"],
+      "properties": {
+        "path": { "type": "string" },
+        "classification": {
+          "enum": [
+            "current",
+            "valid-dynamic-extension",
+            "obsolete-or-wrong-shape",
+            "ignored-or-nonexistent",
+            "intentional-semantic-exception",
+            "uncertain-needs-targeted-review"
+          ]
+        },
+        "reason": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    }
+  }
+}
