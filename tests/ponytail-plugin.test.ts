@@ -1,34 +1,49 @@
+// Oxlint: Async callbacks and intentionally minimal no-op methods model Amp's Plugin API.
+// oxlint-disable eslint/max-lines-per-function, eslint/no-empty-function, eslint/require-await, oxc/no-async-await, typescript/explicit-function-return-type
 import { describe, expect, test } from "bun:test";
-
 import ponytailPlugin, {
   filterSkillBodyForMode,
   getPonytailInstructions,
   isDeactivationCommand,
   parsePonytailCommand,
 } from "../plugins/ponytail";
+import type { PluginAPI } from "@ampcode/plugin";
 
-type Handler = (event: any, context?: any) => any;
+type Handler = (...arguments_: unknown[]) => unknown;
 
-function createAmp(defaultMode?: string) {
+interface Harness {
+  commands: Map<string, Handler>;
+  handlers: Map<string, Handler>;
+  notifications: string[];
+  updateConfiguration: (config: Record<string, unknown>) => void;
+  updates: [Record<string, unknown>, string | undefined][];
+}
+
+const createAmp = (defaultMode?: string): Harness => {
   const handlers = new Map<string, Handler>();
   const commands = new Map<string, Handler>();
   const notifications: string[] = [];
-  const updates: Array<[Record<string, unknown>, string | undefined]> = [];
-  let configurationObserver: Handler | undefined;
+  const updates: [Record<string, unknown>, string | undefined][] = [];
+  let configurationObserver: Handler | false = false;
 
   const amp = {
     configuration: {
-      get: async () => (defaultMode ? { "ponytail.defaultMode": defaultMode } : {}),
-      update: async (value: Record<string, unknown>, target?: string) => {
-        updates.push([value, target]);
+      get: async () => {
+        if (defaultMode) {
+          return { "ponytail.defaultMode": defaultMode };
+        }
+        return {};
       },
       subscribe(observer: Handler) {
         configurationObserver = observer;
         return { unsubscribe() {} };
       },
+      update: async (value: Record<string, unknown>, target?: string) => {
+        updates.push([value, target]);
+      },
     },
-    logger: { log() {} },
     helpers: { isPluginUINotAvailableError: () => false },
+    logger: { log() {} },
     on(event: string, handler: Handler) {
       handlers.set(event, handler);
       return { unsubscribe() {} };
@@ -38,60 +53,76 @@ function createAmp(defaultMode?: string) {
     },
     registerCommand(id: string, _options: unknown, handler: Handler) {
       commands.set(id, handler);
-      return { unsubscribe() {}, setAvailability() {} };
+      return { setAvailability() {}, unsubscribe() {} };
     },
   };
 
-  ponytailPlugin(amp as any);
+  ponytailPlugin(amp as unknown as PluginAPI);
 
   return {
-    handlers,
     commands,
+    handlers,
     notifications,
-    updates,
     updateConfiguration(config: Record<string, unknown>) {
-      configurationObserver?.(config);
+      if (configurationObserver) {
+        configurationObserver(config);
+      }
     },
+    updates,
   };
-}
+};
 
-function commandContext(notifications: string[], selected?: string, threadID = "T-test") {
-  return {
-    thread: { id: threadID },
-    ui: {
-      notify: async (message: string) => {
-        notifications.push(message);
-      },
-      select: async () => selected,
+const commandContext = (notifications: string[], selected?: string, threadID = "T-test") => ({
+  system: { open: async () => {} },
+  thread: { id: threadID },
+  ui: {
+    notify: async (message: string) => {
+      notifications.push(message);
     },
-    system: { open: async () => {} },
-  };
-}
+    select: async () => selected,
+  },
+});
 
-function eventContext(notifications: string[]) {
-  return {
-    ui: {
-      notify: async (message: string) => {
-        notifications.push(message);
-      },
+const eventContext = (notifications: string[]) => ({
+  ui: {
+    notify: async (message: string) => {
+      notifications.push(message);
     },
-  };
-}
+  },
+});
+
+const getHandler = (handlers: Map<string, Handler>, name: string): Handler => {
+  const handler = handlers.get(name);
+  if (!handler) {
+    throw new Error(`Missing ${name} handler`);
+  }
+  return handler;
+};
+
+const messageContent = (result: unknown): string => {
+  const candidate = result as { message?: { content?: unknown } };
+  const content = candidate.message && candidate.message.content;
+  if (typeof content !== "string") {
+    throw new TypeError("Expected an agent-start message result");
+  }
+  return content;
+};
 
 describe("Ponytail command parsing", () => {
   test("accepts Amp and upstream command forms", () => {
     expect(parsePonytailCommand("/ponytail lite")).toEqual({
-      type: "set-mode",
       mode: "lite",
+      type: "set-mode",
     });
     expect(parsePonytailCommand("@ponytail default ultra")).toEqual({
-      type: "set-default",
       mode: "ultra",
+      type: "set-default",
     });
     expect(parsePonytailCommand("/ponytail:ponytail status")).toEqual({
       type: "status",
     });
-    expect(parsePonytailCommand("please use ponytail")).toBeNull();
+    expect(parsePonytailCommand("please use ponytail")).toBeUndefined();
+    expect(parsePonytailCommand("ponytail seems too strict")).toEqual({ type: "invalid" });
   });
 
   test("only deactivates for standalone commands", () => {
@@ -129,98 +160,98 @@ describe("Ponytail instructions", () => {
 describe("Amp integration", () => {
   test("injects the configured default on every turn", async () => {
     const { handlers, notifications } = createAmp("lite");
-    const agentStart = handlers.get("agent.start")!;
+    const agentStart = getHandler(handlers, "agent.start");
 
     const result = await agentStart(
       {
-        thread: { id: "T-one" },
         message: "Fix the bug",
+        thread: { id: "T-one" },
       },
       eventContext(notifications),
     );
 
-    expect(result.message.content).toContain("PONYTAIL MODE ACTIVE — level: lite");
-    expect(result.message.content).not.toContain("| **full** |");
+    expect(messageContent(result)).toContain("PONYTAIL MODE ACTIVE — level: lite");
+    expect(messageContent(result)).not.toContain("| **full** |");
   });
 
   test("keeps mode changes isolated per thread", async () => {
     const { handlers, notifications } = createAmp();
-    const agentStart = handlers.get("agent.start")!;
+    const agentStart = getHandler(handlers, "agent.start");
     const context = eventContext(notifications);
 
     await agentStart(
       {
-        thread: { id: "T-one" },
         message: "/ponytail ultra",
+        thread: { id: "T-one" },
       },
       context,
     );
     const first = await agentStart(
       {
-        thread: { id: "T-one" },
         message: "Implement it",
+        thread: { id: "T-one" },
       },
       context,
     );
     const second = await agentStart(
       {
-        thread: { id: "T-two" },
         message: "Implement it",
+        thread: { id: "T-two" },
       },
       context,
     );
 
-    expect(first.message.content).toContain("level: ultra");
-    expect(second.message.content).toContain("level: full");
+    expect(messageContent(first)).toContain("level: ultra");
+    expect(messageContent(second)).toContain("level: full");
     expect(notifications).toContain("Ponytail mode changed to ultra for this thread.");
   });
 
   test("uses live default changes for new threads", async () => {
     const { handlers, notifications, updateConfiguration } = createAmp();
-    const agentStart = handlers.get("agent.start")!;
+    const agentStart = getHandler(handlers, "agent.start");
 
     updateConfiguration({ "ponytail.defaultMode": "lite" });
     const result = await agentStart(
       {
-        thread: { id: "T-new" },
         message: "Implement it",
+        thread: { id: "T-new" },
       },
       eventContext(notifications),
     );
 
-    expect(result.message.content).toContain("level: lite");
+    expect(messageContent(result)).toContain("level: lite");
   });
 
   test("stops injecting after exact deactivation", async () => {
     const { handlers, notifications } = createAmp();
-    const agentStart = handlers.get("agent.start")!;
+    const agentStart = getHandler(handlers, "agent.start");
     const context = eventContext(notifications);
 
     const stopped = await agentStart(
       {
-        thread: { id: "T-one" },
         message: "stop ponytail",
+        thread: { id: "T-one" },
       },
       context,
     );
     const next = await agentStart(
       {
-        thread: { id: "T-one" },
         message: "Keep working",
+        thread: { id: "T-one" },
       },
       context,
     );
 
-    expect(stopped.message.content).toBe("Ponytail mode changed to off for this thread.");
+    expect(messageContent(stopped)).toBe("Ponytail mode changed to off for this thread.");
     expect(notifications).toContain("Ponytail mode changed to off for this thread.");
-    expect(next).toBeUndefined();
+    expect(next).toEqual({});
   });
 
   test("registers native mode and default controls", async () => {
     const { commands, notifications, updates } = createAmp();
 
-    await commands.get("ponytail-mode")!(commandContext(notifications, "ultra"));
-    await commands.get("ponytail-default-mode")!(commandContext(notifications, "lite"));
+    await getHandler(commands, "ponytail-mode")(commandContext(notifications, "ultra"));
+    await getHandler(commands, "ponytail-default-mode")(commandContext(notifications, "lite"));
 
     expect(notifications).toContain("Ponytail mode set to ultra for this thread.");
     expect(updates).toEqual([[{ "ponytail.defaultMode": "lite" }, "global"]]);
