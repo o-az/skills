@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Amp Orbs setup
+
+echo "No persistent services require resume"
