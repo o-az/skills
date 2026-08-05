@@ -37,10 +37,14 @@ betterleaks = "latest"
 [hooks]
 postinstall = "hk install --mise"
 
+[tasks]
+description = "run tests"
+run = "bun test"
+
 [tasks.check]
 description = "format & lint files"
 run = "hk fix --all && hk check --all"
 
 [tasks.ci]
 description = "run CI tasks"
-run = "hk fix --all && hk check --all"
+run = "hk fix --all && hk check --all && bun test"

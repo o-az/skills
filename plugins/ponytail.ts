@@ -1,3 +1,5 @@
+// Oxlint: This distributable plugin intentionally embeds Ponytail's instructions and uses Amp's async APIs.
+// oxlint-disable eslint/max-lines, eslint/max-lines-per-function, eslint/max-statements, oxc/no-async-await
 import type { PluginAPI, PluginCommandContext, ThreadID } from "@ampcode/plugin";
 
 export const description =
@@ -15,9 +17,12 @@ export type PonytailCommand =
 const DEFAULT_MODE: PonytailMode = "full";
 const DEFAULT_MODE_KEY = "ponytail.defaultMode";
 const PONYTAIL_URL = "https://github.com/dietrichgebert/ponytail";
+const PONYTAIL_COMMAND_PATTERN = /^(?:[/@$])?ponytail(?::ponytail)?(?:\s+(?<arguments>.*))?$/u;
+const TABLE_MODE_PATTERN = /^\|\s*\*\*(?<mode>.+?)\*\*\s*\|/u;
+const EXAMPLE_MODE_PATTERN = /^-\s*(?<mode>[^:]+):\s*"/u;
 
-// Adapted from Ponytail's canonical skills/ponytail/SKILL.md. Keeping the
-// complete body here makes the installed, single-file Amp plugin work offline.
+// Adapted from Ponytail's canonical skills/ponytail/SKILL.md.
+// Keeping the complete body here makes the installed, single-file Amp plugin work offline.
 const PONYTAIL_SKILL_BODY = `# Ponytail
 
 You are a lazy senior developer. Lazy means efficient, not careless. You have
@@ -120,102 +125,132 @@ changed or session end.
 
 The shortest path to done is the right path.`;
 
-export function normalizeMode(value: unknown): PonytailMode | null {
-  if (typeof value !== "string") return null;
+export const normalizeMode = (value: unknown): PonytailMode | undefined => {
+  if (typeof value !== "string") {
+    return;
+  }
 
   const normalized = value.trim().toLowerCase();
-  return PONYTAIL_MODES.includes(normalized as PonytailMode) ? (normalized as PonytailMode) : null;
-}
+  if (!PONYTAIL_MODES.includes(normalized as PonytailMode)) {
+    return;
+  }
 
-export function isDeactivationCommand(value: unknown): boolean {
+  return normalized as PonytailMode;
+};
+
+export const isDeactivationCommand = (value: unknown): boolean => {
   const normalized = String(value ?? "")
     .trim()
     .toLowerCase()
-    .replace(/[.!?\s]+$/, "");
+    .replace(/[.!?\s]+$/u, "");
 
   return normalized === "stop ponytail" || normalized === "normal mode";
-}
+};
 
-export function parsePonytailCommand(value: unknown): PonytailCommand | null {
+export const parsePonytailCommand = (value: unknown): PonytailCommand | undefined => {
   if (isDeactivationCommand(value)) {
-    return { type: "set-mode", mode: "off" };
+    return { mode: "off", type: "set-mode" };
   }
 
   const command = String(value ?? "")
     .trim()
     .toLowerCase()
-    .match(/^(?:[/@$])?ponytail(?::ponytail)?(?:\s+(.*))?$/);
-
-  if (!command) return null;
-
-  const args = command[1]?.trim();
-  if (!args || args === "status") return { type: "status" };
-
-  const parts = args.split(/\s+/);
-  if (parts[0] === "default") {
-    const mode = parts.length === 2 ? normalizeMode(parts[1]) : null;
-    return mode ? { type: "set-default", mode } : { type: "invalid" };
+    .match(PONYTAIL_COMMAND_PATTERN);
+  if (!command || !command.groups) {
+    return;
   }
 
-  const mode = parts.length === 1 ? normalizeMode(parts[0]) : null;
-  return mode ? { type: "set-mode", mode } : { type: "invalid" };
-}
+  const { arguments: argumentText } = command.groups;
+  let argumentsValue = "";
+  if (argumentText) {
+    argumentsValue = argumentText.trim();
+  }
+  if (!argumentsValue || argumentsValue === "status") {
+    return { type: "status" };
+  }
 
-export function filterSkillBodyForMode(body: string, mode: PonytailMode): string {
-  return body
-    .split(/\r?\n/)
+  const [primary, secondary, extra] = argumentsValue.split(/\s+/u);
+  if (primary === "default") {
+    if (!extra) {
+      const mode = normalizeMode(secondary);
+      if (mode) {
+        return { mode, type: "set-default" };
+      }
+    }
+
+    return { type: "invalid" };
+  }
+
+  if (!secondary) {
+    const mode = normalizeMode(primary);
+    if (mode) {
+      return { mode, type: "set-mode" };
+    }
+  }
+
+  return { type: "invalid" };
+};
+
+const modeFromMatch = (match: RegExpMatchArray | null): PonytailMode | undefined => {
+  if (!match || !match.groups) {
+    return;
+  }
+  return normalizeMode(match.groups.mode);
+};
+
+export const filterSkillBodyForMode = (body: string, mode: PonytailMode): string =>
+  body
+    .split(/\r?\n/u)
     .filter((line) => {
-      const tableLabel = line.match(/^\|\s*\*\*(.+?)\*\*\s*\|/);
-      if (tableLabel) {
-        const labelMode = normalizeMode(tableLabel[1]);
-        if (labelMode && labelMode !== "off") return labelMode === mode;
+      const tableMode = modeFromMatch(line.match(TABLE_MODE_PATTERN));
+      if (tableMode && tableMode !== "off") {
+        return tableMode === mode;
       }
 
-      const exampleLabel = line.match(/^-\s*([^:]+):\s*"/);
-      if (exampleLabel) {
-        const labelMode = normalizeMode(exampleLabel[1]);
-        if (labelMode && labelMode !== "off") return labelMode === mode;
+      const exampleMode = modeFromMatch(line.match(EXAMPLE_MODE_PATTERN));
+      if (exampleMode && exampleMode !== "off") {
+        return exampleMode === mode;
       }
 
       return true;
     })
     .join("\n");
-}
 
-export function getPonytailInstructions(mode: PonytailMode): string {
-  if (mode === "off") return "";
+export const getPonytailInstructions = (mode: PonytailMode): string => {
+  if (mode === "off") {
+    return "";
+  }
 
   return `PONYTAIL MODE ACTIVE — level: ${mode}\n\n${filterSkillBodyForMode(PONYTAIL_SKILL_BODY, mode)}`;
-}
+};
 
-function effectiveDefaultMode(config: Record<string, unknown>): PonytailMode {
-  return (
-    normalizeMode(process.env.PONYTAIL_DEFAULT_MODE) ??
-    normalizeMode(config[DEFAULT_MODE_KEY]) ??
-    DEFAULT_MODE
-  );
-}
+const effectiveDefaultMode = (config: Record<string, unknown>): PonytailMode =>
+  normalizeMode(process.env.PONYTAIL_DEFAULT_MODE) ??
+  normalizeMode(config[DEFAULT_MODE_KEY]) ??
+  DEFAULT_MODE;
 
-function requireThread(ctx: PluginCommandContext): ctx is PluginCommandContext & {
+const requireThread = (
+  ctx: PluginCommandContext,
+): ctx is PluginCommandContext & {
   thread: NonNullable<PluginCommandContext["thread"]>;
-} {
-  return Boolean(ctx.thread);
-}
+} => Boolean(ctx.thread);
 
-export default function ponytailPlugin(amp: PluginAPI) {
+const ponytailPlugin = (amp: PluginAPI): void => {
   const threadModes = new Map<ThreadID, PonytailMode>();
   let configuredDefaultMode: PonytailMode =
     normalizeMode(process.env.PONYTAIL_DEFAULT_MODE) ?? DEFAULT_MODE;
   let receivedConfigurationUpdate = false;
 
-  const applyConfiguration = (config: Record<string, unknown>) => {
+  const applyConfiguration = (config: Record<string, unknown>): void => {
     configuredDefaultMode = effectiveDefaultMode(config);
   };
 
   const loadConfiguration = amp.configuration
     .get()
     .then((config) => {
-      if (!receivedConfigurationUpdate) applyConfiguration(config);
+      if (!receivedConfigurationUpdate) {
+        applyConfiguration(config);
+      }
     })
     .catch((error: unknown) => {
       amp.logger.log("Unable to read Ponytail configuration; using the fallback default.", error);
@@ -229,24 +264,27 @@ export default function ponytailPlugin(amp: PluginAPI) {
     configurationSubscription.unsubscribe();
   });
 
-  const getThreadMode = async (threadID: ThreadID) => {
+  const getThreadMode = async (threadID: ThreadID): Promise<PonytailMode> => {
     await loadConfiguration;
-    if (!threadModes.has(threadID)) {
-      threadModes.set(threadID, configuredDefaultMode);
+    const currentMode = threadModes.get(threadID);
+    if (currentMode) {
+      return currentMode;
     }
-    return threadModes.get(threadID) as PonytailMode;
+
+    threadModes.set(threadID, configuredDefaultMode);
+    return configuredDefaultMode;
   };
 
-  const setThreadMode = (threadID: ThreadID, mode: PonytailMode) => {
+  const setThreadMode = (threadID: ThreadID, mode: PonytailMode): void => {
     threadModes.set(threadID, mode);
   };
 
-  const setDefaultMode = async (mode: PonytailMode) => {
+  const setDefaultMode = async (mode: PonytailMode): Promise<void> => {
     await amp.configuration.update({ [DEFAULT_MODE_KEY]: mode }, "global");
     configuredDefaultMode = normalizeMode(process.env.PONYTAIL_DEFAULT_MODE) ?? mode;
   };
 
-  const notify = async (message: string, ui: PluginCommandContext["ui"]) => {
+  const notify = async (message: string, ui: PluginCommandContext["ui"]): Promise<void> => {
     try {
       await ui.notify(message);
     } catch (error) {
@@ -265,37 +303,44 @@ export default function ponytailPlugin(amp: PluginAPI) {
     const command = parsePonytailCommand(event.message);
     let commandResult = "";
 
-    if (command?.type === "set-mode") {
-      currentMode = command.mode;
-      setThreadMode(event.thread.id, currentMode);
-      commandResult = `Ponytail mode changed to ${currentMode} for this thread.`;
-    } else if (command?.type === "set-default") {
-      await setDefaultMode(command.mode);
-      commandResult =
-        configuredDefaultMode === command.mode
-          ? `Default Ponytail mode set to ${command.mode}. The current thread remains ${currentMode}.`
-          : `Saved default ${command.mode}, but PONYTAIL_DEFAULT_MODE keeps the effective default at ${configuredDefaultMode}. The current thread remains ${currentMode}.`;
-    } else if (command?.type === "status") {
-      commandResult = `Ponytail status: current ${currentMode}; default ${configuredDefaultMode}.`;
-    } else if (command?.type === "invalid") {
-      commandResult =
-        "Unknown Ponytail mode. Use off, lite, full, ultra, status, or default <mode>.";
+    if (command) {
+      if (command.type === "set-mode") {
+        currentMode = command.mode;
+        setThreadMode(event.thread.id, currentMode);
+        commandResult = `Ponytail mode changed to ${currentMode} for this thread.`;
+      } else if (command.type === "set-default") {
+        await setDefaultMode(command.mode);
+        commandResult = `Saved default ${command.mode}, but PONYTAIL_DEFAULT_MODE keeps the effective default at ${configuredDefaultMode}. The current thread remains ${currentMode}.`;
+        if (configuredDefaultMode === command.mode) {
+          commandResult = `Default Ponytail mode set to ${command.mode}. The current thread remains ${currentMode}.`;
+        }
+      } else if (command.type === "status") {
+        commandResult = `Ponytail status: current ${currentMode}; default ${configuredDefaultMode}.`;
+      } else {
+        commandResult =
+          "Unknown Ponytail mode. Use off, lite, full, ultra, status, or default <mode>.";
+      }
     }
 
-    if (commandResult) await notify(commandResult, ctx.ui);
+    if (commandResult) {
+      await notify(commandResult, ctx.ui);
+    }
 
     const instructions = getPonytailInstructions(currentMode);
     const content = [commandResult, instructions].filter(Boolean).join("\n\n");
 
-    return content ? { message: { content } } : undefined;
+    if (content) {
+      return { message: { content } };
+    }
+    return {};
   });
 
   amp.registerCommand(
     "ponytail-mode",
     {
-      title: "Change mode",
       category: "ponytail",
       description: "Set Ponytail intensity for the active thread.",
+      title: "Change mode",
     },
     async (ctx) => {
       if (!requireThread(ctx)) {
@@ -305,14 +350,16 @@ export default function ponytailPlugin(amp: PluginAPI) {
 
       const currentMode = await getThreadMode(ctx.thread.id);
       const selected = await ctx.ui.select({
-        title: "Ponytail mode",
+        initialValue: currentMode,
         message:
           "lite suggests the lazier option; full enforces the ladder; ultra challenges unnecessary work.",
         options: [...PONYTAIL_MODES],
-        initialValue: currentMode,
+        title: "Ponytail mode",
       });
       const mode = normalizeMode(selected);
-      if (!mode) return;
+      if (!mode) {
+        return;
+      }
 
       setThreadMode(ctx.thread.id, mode);
       await ctx.ui.notify(`Ponytail mode set to ${mode} for this thread.`);
@@ -322,13 +369,16 @@ export default function ponytailPlugin(amp: PluginAPI) {
   amp.registerCommand(
     "ponytail-status",
     {
-      title: "Show status",
       category: "ponytail",
       description: "Show the active thread mode and configured default.",
+      title: "Show status",
     },
     async (ctx) => {
       await loadConfiguration;
-      const current = ctx.thread ? await getThreadMode(ctx.thread.id) : "(no active thread)";
+      let current: PonytailMode | "(no active thread)" = "(no active thread)";
+      if (ctx.thread) {
+        current = await getThreadMode(ctx.thread.id);
+      }
       await ctx.ui.notify(`Ponytail: current ${current}; default ${configuredDefaultMode}.`);
     },
   );
@@ -336,43 +386,47 @@ export default function ponytailPlugin(amp: PluginAPI) {
   amp.registerCommand(
     "ponytail-default-mode",
     {
-      title: "Set default mode",
       category: "ponytail",
       description: "Set the Ponytail mode used by new Amp threads.",
+      title: "Set default mode",
     },
     async (ctx) => {
       await loadConfiguration;
       const selected = await ctx.ui.select({
-        title: "Default Ponytail mode",
+        initialValue: configuredDefaultMode,
         message: "This applies to new threads and is saved in Amp settings.",
         options: [...PONYTAIL_MODES],
-        initialValue: configuredDefaultMode,
+        title: "Default Ponytail mode",
       });
       const mode = normalizeMode(selected);
-      if (!mode) return;
+      if (!mode) {
+        return;
+      }
 
       await setDefaultMode(mode);
       const overridden = configuredDefaultMode !== mode;
-      await ctx.ui.notify(
-        overridden
-          ? `Saved ${mode}, but PONYTAIL_DEFAULT_MODE keeps the effective default at ${configuredDefaultMode}.`
-          : `Default Ponytail mode set to ${mode}.`,
-      );
+      let message = `Default Ponytail mode set to ${mode}.`;
+      if (overridden) {
+        message = `Saved ${mode}, but PONYTAIL_DEFAULT_MODE keeps the effective default at ${configuredDefaultMode}.`;
+      }
+      await ctx.ui.notify(message);
     },
   );
 
   amp.registerCommand(
     "ponytail-help",
     {
-      title: "Open documentation",
       category: "ponytail",
       description: "Open the Ponytail documentation on GitHub.",
+      title: "Open documentation",
     },
     async (ctx) => {
       await ctx.system.open(PONYTAIL_URL);
     },
   );
-}
+};
+
+export default ponytailPlugin;
 
 /*
 MIT License
