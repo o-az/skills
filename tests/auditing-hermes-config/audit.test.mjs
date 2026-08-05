@@ -20,9 +20,10 @@ import {
   markdown,
   compare,
   validateOutside,
-} from "../scripts/hermes-config-audit.mjs";
+} from "../../skills/auditing-hermes-config/scripts/hermes-config-audit.mjs";
 
-const skill = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const testDir = path.dirname(fileURLToPath(import.meta.url));
+const skill = path.resolve(testDir, "../../skills/auditing-hermes-config");
 const cli = path.join(skill, "scripts/hermes-config-audit.mjs");
 const git = (cwd, ...args) => cp.execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 const write = (root, rel, body, mode) => {
@@ -77,7 +78,7 @@ function repo(files) {
   return root;
 }
 
-const defaults = fs.readFileSync(path.join(skill, "tests/fixtures/config-defaults.py"), "utf8");
+const defaults = fs.readFileSync(path.join(testDir, "fixtures/config-defaults.py"), "utf8");
 const config = `
 # _EXTRA_KNOWN_ROOT_KEYS = {"comment_root"}
 _EXTRA_KNOWN_ROOT_KEYS = {"extra"}
