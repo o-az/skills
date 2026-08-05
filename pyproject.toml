@@ -10,6 +10,9 @@ dev = ["pyrefly>=1.1.1", "ruff>=0.16.0"]
 [tool.pyrefly]
 search_path = [".", "skills/multilingual-caption-video/scripts"]
 ignore-missing-imports = ["faster_whisper", "yt_dlp"]
+project_excludes = [
+  "skills/auditing-hermes-config/tests/fixtures/config-defaults.py"
+]
 
 [tool.ruff]
 line-length = 80

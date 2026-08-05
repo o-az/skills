@@ -598,7 +598,7 @@ function extractModule(src) {
               ? nixField(text, code, optionOpen, optionClose, "description")
               : text
                   .slice(a.valueAt, close)
-                  .match(/^(?:lib\.)?mkEnableOption\s+("(?:\\.|[^"])*")/)?.[1] || null,
+                  .match(/^(?:lib\.)?mkEnableOption\s+("(?:\\[\s\S]|[^"\\])*")/)?.[1] || null,
           declaration: citation(src, rel, text, a.at),
           mappingEvidence: [],
         });

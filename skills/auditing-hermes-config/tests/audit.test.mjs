@@ -186,6 +186,29 @@ test("synthetic pinned source extracts contracts, citations, and structural modu
   assert.equal(enable.description, '"Hermes"');
   assert.equal(packageOption.typeExpression, "types.package");
   assert.equal(packageOption.description, '"Package"');
+  const escapedEnableSource = moduleNix.replace(
+    'mkEnableOption "Hermes"',
+    `mkEnableOption "${"\\!".repeat(10_000)}Hermes"`,
+  );
+  const escapedSource = repo({
+    "hermes_cli/config_defaults.py": defaults,
+    "hermes_cli/config.py": config,
+    "hermes_cli/config_migrations.py":
+      "def migrate(config):\n  if 'custom_providers' in config: return config['custom_providers']\n",
+    "hermes_cli/mcp_config.py": mcp,
+    "nix/nixosModules.nix": escapedEnableSource,
+  });
+  t.after(() => fs.rmSync(escapedSource, { recursive: true, force: true }));
+  const escapedSha = git(escapedSource, "rev-parse", "HEAD");
+  const escapedModule = indexSource({
+    ...f.src,
+    path: escapedSource,
+    sha: escapedSha,
+  }).module;
+  assert.equal(
+    escapedModule.options.find((x) => x.path === "services.hermes-agent.enable").description,
+    `"${"\\!".repeat(10_000)}Hermes"`,
+  );
   assert.match(index.module.options[0].declaration.url, new RegExp(f.sha));
   assert.ok(index.module.options[0].declaration.excerpt);
   const files = sourceFiles(f.src);
