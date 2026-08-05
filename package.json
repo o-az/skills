@@ -11,15 +11,18 @@
   "repository": "github:o-az/skills",
   "type": "module",
   "scripts": {
-    "lint": "oxlint --fix",
+    "lint": "oxlint --fix --deny='all'",
     "format": "oxfmt --write",
     "check": "bun run --parallel --stream --reporter='append-only' format lint",
+    "typecheck": "bun tsc --project tsconfig.json",
     "validate-skills": "bash -c 'for dir in skills/*/; do uvx --from skills-ref agentskills validate $dir; done'"
   },
   "devDependencies": {
     "@ampcode/plugin": "^0.0.0-20260805002929-g5b1c43a",
-    "oxfmt": "^0.61.0",
-    "oxlint": "^1.76.0",
+    "@types/bun": "^1.3.14",
+    "@types/node": "^26.1.2",
+    "oxfmt": "^0.62.0",
+    "oxlint": "^1.77.0",
     "oxlint-tsgolint": "^7.0.2001",
     "typescript": "^7.0.2"
   }

@@ -35,6 +35,7 @@ const optionalKeys = [
   },
 ];
 
+/** @type {(command: string) => string} */
 function findCommand(command) {
   const pathValue = process.env.PATH ?? "";
   for (const dir of pathValue.split(NodePath.delimiter)) {
@@ -51,6 +52,7 @@ function findCommand(command) {
   return "";
 }
 
+/** @type {(command: string) => string} */
 function readCommandVersion(command) {
   const attempts = {
     asciinema: [["--version"]],
@@ -72,15 +74,19 @@ function readCommandVersion(command) {
   return "version unknown";
 }
 
+/** @type {(key: string) => boolean} */
 function hasEnvVar(key) {
   return typeof process.env[key] === "string" && process.env[key] !== "";
 }
 
+/** @type {(versionLine: string) => number | null} */
 function parseMajorVersion(versionLine) {
   const match = versionLine.match(/(\d+)\./);
+  // @ts-expect-error --
   return match ? Number.parseInt(match[1], 10) : null;
 }
 
+/** @type {(kind: string, name: string, message: string) => void} */
 function printStatus(kind, name, message) {
   console.log(`${kind.padEnd(12)} ${name.padEnd(12)} ${message}`);
 }
