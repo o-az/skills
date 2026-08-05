@@ -30,6 +30,7 @@ tombi = "latest"
 usage = "latest"
 ghalint = "latest"
 gitleaks = "latest"
+shellcheck = "latest"
 actionlint = "latest"
 betterleaks = "latest"
 
