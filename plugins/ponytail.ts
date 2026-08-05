@@ -1,5 +1,3 @@
-// @amp-plugin updated automatically from https://raw.githubusercontent.com/o-az/skills/main/plugins/ponytail.ts
-
 import type { PluginAPI, PluginCommandContext, ThreadID } from "@ampcode/plugin";
 
 export const description =

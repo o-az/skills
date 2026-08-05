@@ -7,13 +7,18 @@ solution that actually works. The Amp plugin applies Ponytail on every agent
 turn, keeps intensity modes isolated per thread, and exposes native controls in
 Amp's command palette.
 
-Install it as a system plugin with automatic updates:
+Install it as a system plugin on macOS or Linux:
 
 ```sh
-amp plugins add --auto-update https://raw.githubusercontent.com/o-az/skills/main/plugins/ponytail.ts
+mkdir -p ~/.config/amp/plugins
+curl -fsSL https://raw.githubusercontent.com/o-az/skills/main/plugins/ponytail.ts \
+  -o ~/.config/amp/plugins/ponytail.ts
 ```
 
 Then run `plugins: reload` from Amp's command palette or restart Amp.
+
+The current Amp CLI only accepts Amp-hosted URLs in `amp plugins add`. Rerun
+the command above to update this GitHub-hosted plugin.
 
 ### Use
 
@@ -51,7 +56,7 @@ Set `PONYTAIL_DEFAULT_MODE=off|lite|full|ultra` to override the saved default.
 Remove the plugin with:
 
 ```sh
-amp plugins remove ponytail.ts
+rm ~/.config/amp/plugins/ponytail.ts
 ```
 
 The Ponytail instructions embedded in the plugin are adapted from

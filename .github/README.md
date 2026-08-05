@@ -45,7 +45,9 @@ The [Ponytail plugin](/plugins#ponytail) adds always-on, mode-aware
 [Ponytail](https://github.com/dietrichgebert/ponytail) support to Amp:
 
 ```bash
-amp plugins add --auto-update https://raw.githubusercontent.com/o-az/skills/main/plugins/ponytail.ts
+mkdir -p ~/.config/amp/plugins
+curl -fsSL https://raw.githubusercontent.com/o-az/skills/main/plugins/ponytail.ts \
+  -o ~/.config/amp/plugins/ponytail.ts
 ```
 
 ## Contributing a new Skill
