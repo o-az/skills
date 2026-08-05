@@ -6,5 +6,8 @@ DEFAULT_CONFIG = {
     "platforms": {},
     "secrets": {"resolver": "native"},
     "static_flag": True,
+    "optional_count": None,
+    "stop_sequences": [],
+    "terminal": {"cursor": "\u2589"},
     "stt": {"provider": "local"},
 }

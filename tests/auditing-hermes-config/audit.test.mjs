@@ -1,43 +1,59 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { afterEach, expect, test } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import cp from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  argsOf,
-  parsePyDefault,
-  literalAfter,
-  flatten,
-  indexSource,
-  classify,
-  resolveTarget,
-  resolveSource,
-  sourceFiles,
-  snapshot,
-  audit,
   markdown,
-  compare,
-  validateOutside,
+  parsePyDefault,
 } from "../../skills/auditing-hermes-config/scripts/hermes-config-audit.mjs";
 
-const testDir = path.dirname(fileURLToPath(import.meta.url));
-const skill = path.resolve(testDir, "../../skills/auditing-hermes-config");
-const cli = path.join(skill, "scripts/hermes-config-audit.mjs");
-const git = (cwd, ...args) => cp.execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+const here = path.dirname(fileURLToPath(import.meta.url));
+const cli = path.resolve(
+  here,
+  "../../skills/auditing-hermes-config/scripts/hermes-config-audit.mjs",
+);
+const defaults = fs.readFileSync(path.join(here, "fixtures/config-defaults.py"), "utf8");
+const temporaryRoots = new Set();
+const temporaryDirectory = (prefix) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  temporaryRoots.add(root);
+  return root;
+};
+afterEach(() => {
+  for (const root of temporaryRoots) fs.rmSync(root, { recursive: true, force: true });
+  temporaryRoots.clear();
+});
+const run = (cmd, args, cwd, env) => {
+  const result = Bun.spawnSync([cmd, ...args], { cwd, env, stdout: "pipe", stderr: "pipe" });
+  if (!result.success)
+    throw new Error(result.stderr.toString().trim() || `${cmd} exited ${result.exitCode}`);
+  return result.stdout.toString().trim();
+};
 const write = (root, rel, body, mode) => {
-  const file = path.join(root, rel);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, body, mode && { mode });
-  return file;
+  const p = path.join(root, rel);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, body, mode ? { mode } : undefined);
+  return p;
 };
 
 function validateSchema(value, schema, root = schema, where = "$") {
   if (schema.$ref)
     return validateSchema(value, root.$defs[schema.$ref.split("/").at(-1)], root, where);
-  if (schema.const !== undefined) assert.deepEqual(value, schema.const, `${where} const`);
-  if (schema.enum) assert.ok(schema.enum.includes(value), `${where} enum`);
+  if (schema.oneOf) {
+    const matches = schema.oneOf.filter((candidate) => {
+      try {
+        validateSchema(value, candidate, root, where);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (matches.length !== 1) throw new Error(`${where} oneOf`);
+    return;
+  }
+  if (schema.const !== undefined && value !== schema.const) throw new Error(`${where} const`);
+  if (schema.enum && !schema.enum.includes(value)) throw new Error(`${where} enum`);
   if (schema.type) {
     const actual =
       value === null
@@ -47,504 +63,410 @@ function validateSchema(value, schema, root = schema, where = "$") {
           : Number.isInteger(value)
             ? "integer"
             : typeof value;
-    assert.ok(
-      [schema.type].flat().includes(actual) || (schema.type === "number" && actual === "integer"),
-      `${where} type ${actual}`,
-    );
+    if (![schema.type].flat().includes(actual)) throw new Error(`${where} type ${actual}`);
   }
-  if (schema.pattern) assert.match(value, new RegExp(schema.pattern), where);
+  if (schema.pattern) {
+    if (schema.pattern !== "^[0-9a-f]{40}$") throw new Error(`${where} unsupported pattern`);
+    if (!/^[0-9a-f]{40}$/.test(value)) throw new Error(`${where} pattern`);
+  }
+  if (schema.minimum !== undefined && value < schema.minimum) throw new Error(`${where} minimum`);
+  if (schema.minLength !== undefined && value.length < schema.minLength)
+    throw new Error(`${where} minLength`);
+  if (schema.format === "date-time" && Number.isNaN(Date.parse(value)))
+    throw new Error(`${where} format`);
   for (const key of schema.required || [])
-    assert.ok(Object.hasOwn(value, key), `${where}.${key} required`);
+    if (!Object.hasOwn(value, key)) throw new Error(`${where}.${key} required`);
+  if (schema.additionalProperties === false)
+    for (const key of Object.keys(value))
+      if (!Object.hasOwn(schema.properties || {}, key))
+        throw new Error(`${where}.${key} additional`);
   for (const [key, child] of Object.entries(schema.properties || {}))
     if (Object.hasOwn(value, key)) validateSchema(value[key], child, root, `${where}.${key}`);
   if (schema.items)
-    value.forEach((item, i) => validateSchema(item, schema.items, root, `${where}[${i}]`));
-  for (const rule of schema.allOf || [])
-    if (
-      !rule.if?.properties ||
-      Object.entries(rule.if.properties).every(([k, s]) => value[k] === s.const)
-    )
-      validateSchema(value, rule.then || rule, root, where);
+    value.forEach((item, index) => validateSchema(item, schema.items, root, `${where}[${index}]`));
 }
 
 function repo(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "hermes-fixture-"));
-  git(root, "init", "-q");
-  git(root, "config", "user.email", "fixture@example.invalid");
-  git(root, "config", "user.name", "Fixture");
-  for (const [name, body] of Object.entries(files)) write(root, name, body);
-  git(root, "add", ".");
-  git(root, "commit", "-qm", "fixture");
+  const root = temporaryDirectory("audit-");
+  run("git", ["init", "-q"], root);
+  run("git", ["config", "user.email", "x@y.invalid"], root);
+  run("git", ["config", "user.name", "x"], root);
+  for (const [p, x] of Object.entries(files))
+    write(root, p, typeof x === "string" ? x.replaceAll("\\n", "\n") : x);
+  run("git", ["add", "."], root);
+  run("git", ["commit", "-qm", "fixture"], root);
   return root;
 }
-
-const defaults = fs.readFileSync(path.join(testDir, "fixtures/config-defaults.py"), "utf8");
-const config = `
-# _EXTRA_KNOWN_ROOT_KEYS = {"comment_root"}
-_EXTRA_KNOWN_ROOT_KEYS = {"extra"}
-_OPEN_DICT_TOP_LEVEL_KEYS = {"open"}
-_PLATFORM_CONTAINER_KEYS = {"discord"}
-DISCORD_KNOWN_FIELDS = {"token", "tools"}
-def validate_platform(name, entry):
-  return name in _PLATFORM_CONTAINER_KEYS and set(entry).issubset(DISCORD_KNOWN_FIELDS)
-def _deep_merge(a, b):
-  if b is None and isinstance(a, dict): return a
-  return b
-def _normalize_custom_provider_entry(entry):
-  # _KNOWN_KEYS = {"comment_field"}; _CAMEL_ALIASES = {"bad": "worse"}
-  _KNOWN_KEYS = {"base_url", "api_key"}
-  _CAMEL_ALIASES = {"baseUrl": "base_url"}
-  unknown = set(entry).difference(_KNOWN_KEYS)
-  return {k: v for k, v in entry.items() if k in _KNOWN_KEYS}
-`;
-const mcp = `# MCP_SERVER_KNOWN_FIELDS = {"comment_bad"}\nMCP_SERVER_KNOWN_FIELDS = {"command", "tools"}\ndef validate_server(value): return set(value).issubset(MCP_SERVER_KNOWN_FIELDS)\n`;
-const moduleNix = `
-{ lib, ... }: let inherit (lib) mkOption mkEnableOption types; in {
- options.services.hermes-agent = {
-   enable = mkEnableOption "Hermes";
-   package = mkOption { type = types.package; default = null; description = "Package"; };
-   mcpServers = mkOption { type = types.attrsOf (types.submodule ({...}: { options = {
-     command = mkOption { type = types.str; description = "Command"; };
-     tools = { include = mkOption { type = types.listOf types.str; default = []; description = "Included"; }; };
-   }; })); description = "Servers"; };
- };
- config = { generated = if cfg.configFile != null then null else builtins.toJSON cfg.settings; };
-}
-`;
-
-function fixtures() {
+const moduleNix = `{ lib, ... }: { options.services.hermes-agent = {
+  enable = lib.mkEnableOption "Hermes";
+  settings = lib.mkOption {
+    type = lib.types.attrs; default = {};
+    example = { terminal = { cwd = "/tmp"; }; };
+    description = ''Settings with a ; and interpolation.'';
+  };
+  configFile = lib.mkOption {
+    type = lib.types.nullOr lib.types.path; default = null; description = "File";
+  };
+  environment = lib.mkOption {
+    type = lib.types.attrsOf lib.types.str; default = {}; description = "Environment";
+  };
+  container = { enable = lib.mkEnableOption "Container"; };
+  mcpServers = lib.mkOption {
+    type = lib.types.attrsOf (lib.types.submodule ({ ... }: { options = {
+      command = lib.mkOption { type = lib.types.str; default = null; description = "Command"; };
+      tools = lib.mkOption { type = lib.types.submodule ({ ... }: { options = {
+        include = lib.mkOption { type = lib.types.listOf lib.types.str; default = [ ]; };
+      }; }); };
+    }; }));
+    default = {}; description = "MCP servers";
+  };
+}; }`;
+function fixture({ migration = true } = {}) {
   const source = repo({
     "hermes_cli/config_defaults.py": defaults,
-    "hermes_cli/config.py": config,
-    "hermes_cli/config_migrations.py":
-      "def migrate(config):\n  if 'custom_providers' in config: return config['custom_providers']\n",
-    "hermes_cli/mcp_config.py": mcp,
+    "hermes_cli/config.py": `_OPEN_DICT_TOP_LEVEL_KEYS = {"extensions"}\n_PLATFORM_CONTAINER_KEYS = {"discord"}\nDISCORD_KNOWN_FIELDS = {"token", "tools"}\ndef _normalize_custom_provider_entry(entry):\n  _KNOWN_KEYS = {"base_url", "api_key"}\n  _CAMEL_ALIASES = {"baseUrl": "base_url"}\n  return {key: value for key, value in entry.items() if key in _KNOWN_KEYS}\n`,
+    "hermes_cli/config_migrations.py": "# deprecated custom_providers are migrated to providers\n",
+    "hermes_cli/mcp_config.py": 'MCP_SERVER_KN_FIELDS = {"command", "tools"}\n',
     "nix/nixosModules.nix": moduleNix,
-    "_/secret.py": "do not read",
+    "hermes_cli/legacy.py": "# deprecated mystery was renamed\n",
+    "_/never": "secret",
   });
-  const sha = git(source, "rev-parse", "HEAD");
+  write(
+    source,
+    "hermes_cli/config.py",
+    `_OPEN_DICT_TOP_LEVEL_KEYS = frozenset({"extensions", "mcp_servers"})
+_SCHEMA_DEFINED_DICT_KEYS = frozenset({"discord"})
+_DYNAMIC_TOP_LEVEL_KEYS = frozenset({"custom_providers"})
+_PLATFORM_CONTAINER_KEYS = frozenset({"platforms"})
+def _normalize_custom_provider_entry(entry):
+  _KNOWN_KEYS = {"base_url", "api_key"}
+  _CAMEL_ALIASES: Dict[str, str] = {"baseUrl": "base_url"}
+  if "api_key_env" in entry and "key_env" not in entry:
+    entry["key_env"] = entry["api_key_env"]
+  return {key: value for key, value in entry.items() if key in _KNOWN_KEYS}
+`,
+  );
+  write(
+    source,
+    "hermes_cli/mcp_config.py",
+    `def save(server_config, config):
+  server_config["command"] = "x"
+  server_config["args"] = []
+  return config.get("connect_timeout", 30), config.get("tools")
+`,
+  );
+  if (migration)
+    write(
+      source,
+      "hermes_cli/config_migrations.py",
+      `custom_list = config.get("custom_providers")
+config["providers"] = providers_dict
+config.pop("custom_providers", None)
+`,
+    );
+  run("git", ["add", "."], source);
+  run("git", ["commit", "-qm", "realistic forms"], source);
+  const sha = run("git", ["rev-parse", "HEAD"], source);
   const target = repo({
     "flake.lock": JSON.stringify({
       nodes: {
-        "hermes-agent": {
-          locked: { type: "github", rev: sha, owner: "Fixture", repo: "hermes" },
-        },
+        "hermes-agent": { locked: { type: "github", owner: "acme", repo: "hermes", rev: sha } },
       },
     }),
-    "hosts/test/hermes/settings.nix": "{ settings = {}; }\n",
   });
-  return {
-    source,
-    sha,
-    target,
-    src: {
-      path: source,
-      sha,
-      owner: "Fixture",
-      repo: "hermes",
-      cache: fs.mkdtempSync(path.join(os.tmpdir(), "hermes-cache-")),
-    },
-  };
+  return { source, sha, target };
 }
 
-test("literal lexer is comment/string safe and preserves arithmetic/null defaults", () => {
-  const value = parsePyDefault(defaults);
-  assert.equal(value.static_flag, true);
-  assert.equal(value.comment_corruption, undefined);
-  assert.deepEqual([...literalAfter(config, "_EXTRA_KNOWN_ROOT_KEYS")], ["extra"]);
+test("safe literal parser does not execute Python", () => {
+  expect(parsePyDefault(defaults).static_flag).toBe(true);
+  const parsed = parsePyDefault(
+    "DEFAULT_CONFIG = {\n # note\n 'x': 2 * (3 + 1), # inline\n 's': 'a\\n',\n}",
+  );
+  expect(parsed.x).toBe(8);
+  expect(parsed.s).toBe("a\n");
+  expect(parsePyDefault('X: set[str] = frozenset({"a", "b"})\n', "X")).toEqual(new Set(["a", "b"]));
+  expect(parsePyDefault('DEFAULT_CONFIG = {"x": "\\u2589", "y": "\\x41"}')).toEqual({
+    x: "▉",
+    y: "A",
+  });
+  expect(() => parsePyDefault("DEFAULT_CONFIG = call()")).toThrow();
+  expect(() => parsePyDefault("DEFAULT_CONFIG = {'x': call()}")).toThrow(/non-literal/);
 });
 
-test("synthetic pinned source extracts contracts, citations, and structural module options", (t) => {
-  const f = fixtures();
-  t.after(() => {
-    fs.rmSync(f.source, { recursive: true });
-    fs.rmSync(f.target, { recursive: true });
-    fs.rmSync(f.src.cache, { recursive: true });
-  });
-  write(f.source, "ignored.py", "ignored");
-  write(f.source, "untracked.py", "untracked");
-  write(f.source, ".gitignore", "ignored.py\n");
-  const index = indexSource(f.src);
-  assert.deepEqual(index.contracts.provider.knownFields.sort(), ["api_key", "base_url"]);
-  assert.deepEqual(index.contracts.provider.aliases, [{ from: "baseUrl", to: "base_url" }]);
-  assert.ok(!index.contracts.knownRootKeys.includes("comment_root"));
-  assert.deepEqual(index.contracts.platforms.schemas.discord.sort(), ["token", "tools"]);
-  assert.equal(index.module.optionCount, 5);
-  assert.ok(
-    index.module.options.some(
-      (x) => x.path === "services.hermes-agent.enable" && x.typeExpression === "types.bool",
-    ),
-  );
-  assert.ok(
-    index.module.options.some(
-      (x) => x.path === "services.hermes-agent.mcpServers.<name>.tools.include",
-    ),
-  );
-  const enable = index.module.options.find((x) => x.path === "services.hermes-agent.enable");
-  const packageOption = index.module.options.find(
-    (x) => x.path === "services.hermes-agent.package",
-  );
-  assert.equal(enable.description, '"Hermes"');
-  assert.equal(packageOption.typeExpression, "types.package");
-  assert.equal(packageOption.description, '"Package"');
-  const escapedEnableSource = moduleNix.replace(
-    'mkEnableOption "Hermes"',
-    `mkEnableOption "${"\\!".repeat(10_000)}Hermes"`,
-  );
-  const escapedSource = repo({
-    "hermes_cli/config_defaults.py": defaults,
-    "hermes_cli/config.py": config,
-    "hermes_cli/config_migrations.py":
-      "def migrate(config):\n  if 'custom_providers' in config: return config['custom_providers']\n",
-    "hermes_cli/mcp_config.py": mcp,
-    "nix/nixosModules.nix": escapedEnableSource,
-  });
-  t.after(() => fs.rmSync(escapedSource, { recursive: true, force: true }));
-  const escapedSha = git(escapedSource, "rev-parse", "HEAD");
-  const escapedModule = indexSource({
-    ...f.src,
-    path: escapedSource,
-    sha: escapedSha,
-  }).module;
-  assert.equal(
-    escapedModule.options.find((x) => x.path === "services.hermes-agent.enable").description,
-    `"${"\\!".repeat(10_000)}Hermes"`,
-  );
-  assert.match(index.module.options[0].declaration.url, new RegExp(f.sha));
-  assert.ok(index.module.options[0].declaration.excerpt);
-  const files = sourceFiles(f.src);
-  assert.ok(!files.has("_/secret.py"));
-  assert.ok(!files.has("ignored.py"));
-  assert.ok(!files.has("untracked.py"));
-});
-
-test("classification preserves null semantics, unresolved sentinels, platform uncertainty and fail-closed MCP", (t) => {
-  const f = fixtures();
-  t.after(() => {
-    fs.rmSync(f.source, { recursive: true });
-    fs.rmSync(f.target, { recursive: true });
-    fs.rmSync(f.src.cache, { recursive: true });
-  });
-  const index = indexSource(f.src),
-    result = (path, value, type = typeof value) => classify({ path, value, type }, index);
-  assert.equal(result("secrets", null, "null").classification, "uncertain-needs-targeted-review");
-  assert.equal(
-    result("platforms.discord.token", "x").classification,
-    "uncertain-needs-targeted-review",
-  );
-  assert.equal(
-    result("platforms.discord.unknown", true).classification,
-    "uncertain-needs-targeted-review",
-  );
-  assert.equal(
-    result("mcp_servers.a.tools.include.deep", true).classification,
-    "uncertain-needs-targeted-review",
-  );
-  const flat = flatten({ outer: { value: { toolUnresolved: true, reason: "computed" } } });
-  assert.deepEqual(
-    flat.map((x) => x.path),
-    ["outer.value"],
-  );
-  assert.equal(classify(flat[0], index).classification, "uncertain-needs-targeted-review");
-  assert.deepEqual(
-    flatten({ outer: { $unresolved: "user data" } }).map((x) => x.path),
-    ["outer.$unresolved"],
-  );
-  assert.equal(result("providers.scalar", "x").classification, "obsolete-or-wrong-shape");
-  assert.equal(result("mcp_servers.scalar", 1, "number").classification, "obsolete-or-wrong-shape");
-  assert.equal(result("platforms.discord", "x").classification, "obsolete-or-wrong-shape");
-  assert.equal(result("unknown_root", true).classification, "uncertain-needs-targeted-review");
-});
-
-test("target resolution, tracked discipline, exact revision, cache and output boundaries", (t) => {
-  const f = fixtures(),
-    cache = fs.mkdtempSync(path.join(os.tmpdir(), "cache-ok-"));
-  t.after(() => {
-    for (const p of [f.source, f.target, f.src.cache, cache])
-      fs.rmSync(p, { recursive: true, force: true });
-  });
-  assert.equal(resolveTarget({ "target-repo": f.target }).root, fs.realpathSync(f.target));
-  assert.throws(() => resolveTarget({ "target-repo": f.target, repo: f.source }), /conflict/);
-  assert.equal(resolveSource(f.target, { source: f.source, cache }, [f.target, skill]).sha, f.sha);
-  git(f.source, "commit", "--allow-empty", "-qm", "mismatch");
-  assert.throws(
-    () => resolveSource(f.target, { source: f.source, cache }, [f.target, skill]),
-    /does not match/,
-  );
-  assert.throws(
-    () => validateOutside(path.join(f.target, "report.json"), [f.target, skill], "JSON output"),
-    /outside/,
-  );
-  assert.throws(
-    () => validateOutside(path.join(f.target, "cache"), [f.target, skill], "cache root"),
-    /outside/,
-  );
-});
-
-test("snapshot invokes fake nix eval once and never build", (t) => {
-  const f = fixtures(),
-    bin = fs.mkdtempSync(path.join(os.tmpdir(), "fake-nix-")),
-    log = path.join(bin, "calls");
-  t.after(() => {
-    for (const p of [f.source, f.target, f.src.cache, bin])
-      fs.rmSync(p, { recursive: true, force: true });
-  });
+test("offline exact object audit catalogs, compares, evaluates once, and writes safely", () => {
+  const f = fixture(),
+    bin = temporaryDirectory("bin-"),
+    out = temporaryDirectory("out-"),
+    calls = path.join(bin, "calls"),
+    nixArgs = path.join(bin, "args");
   write(
     bin,
     "nix",
-    `#!/bin/sh\necho "$*" >> "${log}"\nprintf '%s' '{"host":"test","provenance":"single-host-flake-eval","evaluated":true,"runtimeDocument":{"model":"SECRET_DO_NOT_EMIT"},"moduleValues":{"enable":true,"environment":{"TOKEN":"SECRET_DO_NOT_EMIT"}},"localAssignments":[],"mode":"settings","settingsEmpty":false,"configFileBypassesSettings":false,"limits":[]}'\n`,
+    `#!/bin/sh\necho CALL >> '${calls}'\nprintf '%s' "$*" > '${nixArgs}'\nprintf '%s' '{"available":true,"enabled":true,"mode":"generated","configFileSet":false,"nativeShape":{"enable":"<boolean>","settings":{"model":"<string>"},"environment":{"TOKEN":"<string>"}},"applicationShape":{"model":"<string>","optional_count":"<number>","stop_sequences":"<array>","terminal":{"cwd":"<string>"},"providers":{"custom":{"base_url":"<string>"}},"custom_providers":"<array>","extensions":{"x":"<string>"},"mystery":"<number>"}}'\n`,
     0o755,
   );
-  const old = process.env.PATH;
-  process.env.PATH = `${bin}:${old}`;
-  try {
-    const snap = snapshot(resolveTarget({ "target-repo": f.target }), "test");
-    assert.equal(snap.evaluated, true);
-  } finally {
-    process.env.PATH = old;
-  }
-  const calls = fs.readFileSync(log, "utf8").trim().split("\n");
-  assert.equal(calls.filter((x) => x.startsWith("eval ")).length, 1);
-  assert.equal(calls.filter((x) => /build|switch/.test(x)).length, 0);
-  assert.match(calls[0], /--option allow-import-from-derivation false/);
-
-  const out = fs.mkdtempSync(path.join(os.tmpdir(), "snapshot-redaction-"));
-  t.after(() => fs.rmSync(out, { recursive: true, force: true }));
-  const report = path.join(out, "snapshot.json");
-  process.env.PATH = `${bin}:${old}`;
-  try {
-    cp.execFileSync(process.execPath, [
+  run("git", ["commit", "--allow-empty", "-qm", "HEAD may differ"], f.source);
+  const stdout = run(
+    "node",
+    [
       cli,
-      "snapshot",
+      "audit",
       "--target-repo",
       f.target,
       "--host",
       "test",
-      "--json",
-      report,
-    ]);
-  } finally {
-    process.env.PATH = old;
-  }
-  assert.doesNotMatch(fs.readFileSync(report, "utf8"), /SECRET_DO_NOT_EMIT/);
-  assert.equal(fs.statSync(report).mode & 0o777, 0o600);
-});
-
-test("static adapter and command surfaces fail closed", (t) => {
-  const f = fixtures();
-  t.after(() =>
-    [f.source, f.target, f.src.cache].forEach((p) =>
-      fs.rmSync(p, { recursive: true, force: true }),
-    ),
-  );
-  const target = resolveTarget({ "target-repo": f.target });
-  const noAdapter = snapshot(target, "test", { "no-nix": true });
-  assert.equal(noAdapter.provenance, "unresolved-no-adapter");
-  assert.equal(
-    snapshot(target, "test", { "no-nix": true, "host-adapter": "hosts/test/hermes/settings.nix" })
-      .provenance,
-    "static-source-adapter",
-  );
-  write(f.target, "untracked.nix", "{}\n");
-  write(f.target, "ignored.nix", "{}\n");
-  write(f.target, ".gitignore", "ignored.nix\n");
-  for (const rel of ["untracked.nix", "ignored.nix", "hosts/../flake.lock", "_/x.nix"])
-    assert.throws(
-      () => snapshot(target, "test", { "no-nix": true, "host-adapter": rel }),
-      /normalized tracked|without an _/,
-    );
-  assert.throws(() => argsOf(["audit", "--hots", "x"]), /not valid/);
-  assert.throws(() => argsOf(["audit", "--no-nix"]), /--host is required/);
-  assert.throws(() => argsOf(["snapshot"]), /--host is required/);
-});
-
-test("self-contained CLI audit writes schema-safe JSON/Markdown outside repositories", (t) => {
-  const f = fixtures(),
-    out = fs.mkdtempSync(path.join(os.tmpdir(), "audit-out-")),
-    cache = fs.mkdtempSync(path.join(os.tmpdir(), "audit-cache-"));
-  t.after(() => {
-    for (const p of [f.source, f.target, f.src.cache, out, cache])
-      fs.rmSync(p, { recursive: true, force: true });
-  });
-  const json = path.join(out, "audit.json"),
-    md = path.join(out, "audit.md");
-  cp.execFileSync(process.execPath, [
-    cli,
-    "audit",
-    "--target-repo",
+      "--source",
+      f.source,
+      "--output-dir",
+      out,
+    ],
     f.target,
-    "--source",
-    f.source,
-    "--cache",
-    cache,
-    "--host",
-    "test",
-    "--no-nix",
-    "--refresh-index",
-    "--json",
-    json,
-    "--markdown",
-    md,
-  ]);
-  const doc = JSON.parse(fs.readFileSync(json, "utf8"));
+    { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+  );
+  const [json, md] = stdout.split("\n"),
+    doc = JSON.parse(fs.readFileSync(json));
   validateSchema(
     doc,
-    JSON.parse(fs.readFileSync(path.join(skill, "reference/audit.schema.json"), "utf8")),
+    JSON.parse(
+      fs.readFileSync(
+        path.resolve(here, "../../skills/auditing-hermes-config/reference/audit.schema.json"),
+      ),
+    ),
   );
-  assert.deepEqual(Object.keys(doc).sort(), [
-    "command",
-    "findings",
-    "generatedAt",
+  expect(doc.provenance.resolvedSha).toBe(f.sha);
+  expect(doc.local.available).toBe(true);
+  expect(
+    doc.applicationInventory.entries.some(
+      (x) => x.path === "providers.<name>.base_url" && x.dynamic,
+    ),
+  ).toBe(true);
+  expect(doc.applicationInventory.entries.map((x) => x.path)).toContain("platforms.<name>.*");
+  expect(doc.applicationInventory.entries.map((x) => x.path)).toContain("discord.*");
+  expect(doc.applicationInventory.diagnostics).toEqual([]);
+  expect(doc.applicationInventory.entries.map((x) => x.path)).toContain(
+    "mcp_servers.<name>.command",
+  );
+  expect(doc.moduleInventory.entries).toHaveLength(9);
+  expect(
+    doc.moduleInventory.entries.some(
+      (x) => x.path === "services.hermes-agent.mcpServers.<name>.command",
+    ),
+  ).toBe(true);
+  expect(
+    doc.moduleInventory.entries.some((x) => x.path === "services.hermes-agent.container.enable"),
+  ).toBe(true);
+  const mcp = doc.moduleInventory.entries.find(
+    (x) => x.path === "services.hermes-agent.mcpServers",
+  );
+  expect(mcp.default).toBe("{}");
+  expect(mcp.description).toBe('"MCP servers"');
+  expect(mcp.type).toContain("lib.types.submodule");
+  expect(
+    doc.moduleInventory.entries.find(
+      (x) => x.path === "services.hermes-agent.mcpServers.<name>.tools.include",
+    ).mapping,
+  ).toBe("generates-application-config");
+  expect(doc.moduleInventory.entries.find((x) => x.path.endsWith("settings")).example).toContain(
+    'cwd = "/tmp"',
+  );
+  expect(doc.moduleInventory.entries.every((x) => x.evidence.url.includes(f.sha))).toBe(true);
+  expect(doc.comparison.presentInGeneratedOverride).toContain("providers.custom.base_url");
+  expect(doc.comparison.presentInGeneratedOverride).toContain("optional_count");
+  expect(doc.comparison.presentInGeneratedOverride).toContain("stop_sequences");
+  expect(doc.comparison.applicationMismatches.map((x) => x.path)).toContain("extensions.x");
+  expect(doc.comparison.moduleMismatches).toHaveLength(0);
+  expect(doc.comparison.applicationMismatches.map((x) => x.path)).toContain("mystery");
+  expect(
+    doc.comparison.applicationMismatches.find((x) => x.path === "custom_providers").classification,
+  ).toBe("deprecated-or-migrated");
+  expect(fs.readFileSync(calls, "utf8").trim()).toBe("CALL");
+  const invocation = fs.readFileSync(nixArgs, "utf8");
+  expect(invocation).toMatch(/--offline --no-update-lock-file/);
+  expect(invocation).toMatch(/allow-import-from-derivation false/);
+  expect(invocation).toMatch(/builtins\.getAttr "test"/);
+  expect(fs.statSync(json).mode & 0o777).toBe(0o600);
+  expect(fs.statSync(md).mode & 0o777).toBe(0o600);
+  expect(Object.keys(doc).sort()).toEqual([
+    "applicationInventory",
+    "comparison",
     "limits",
-    "moduleSummary",
+    "local",
+    "moduleInventory",
     "provenance",
-    "readOnly",
-    "safety",
     "schemaVersion",
-    "surfaces",
   ]);
-  assert.equal(doc.provenance.resolvedSha, f.sha);
-  assert.equal("hermesSha" in doc.provenance, false);
-  assert.ok(doc.findings.some((x) => x.path === "<host-evaluation>"));
-  assert.match(fs.readFileSync(md, "utf8"), /do not treat as a complete audit/);
-  try {
-    cp.execFileSync("jq", ["--version"], { stdio: "ignore" });
-    for (const filter of [
-      ".provenance.resolvedSha",
-      '.findings[] | select(.classification == "uncertain-needs-targeted-review") | .path',
-      ".surfaces.module.options[] | [.path, .typeExpression] | @tsv",
-      ".limits[]",
-    ])
-      cp.execFileSync("jq", ["-r", filter, json]);
-  } catch (error) {
-    if (error.code === "ENOENT") t.diagnostic("jq unavailable");
-    else throw error;
-  }
-  assert.throws(
-    () =>
-      cp.execFileSync(
-        process.execPath,
+  for (const forbidden of [f.target, f.source])
+    expect(() =>
+      run(
+        "node",
         [
           cli,
           "audit",
           "--target-repo",
           f.target,
+          "--host",
+          "x",
           "--source",
           f.source,
-          "--cache",
-          cache,
-          "--host",
-          "test",
           "--no-nix",
-          "--json",
-          path.join(f.target, "bad.json"),
+          "--output-dir",
+          forbidden,
         ],
-        { encoding: "utf8", stdio: "pipe" },
+        f.target,
       ),
-    /must be outside/,
-  );
-});
-
-test("broader compare includes defaults, flattened values, contracts, and module metadata", () => {
-  const a = { sha: "a", defaults: {}, flatDefaults: [], contracts: {}, module: {} },
-    b = structuredClone(a);
-  b.sha = "b";
-  b.defaults.x = 1;
-  b.flatDefaults.push({ path: "x" });
-  b.contracts.x = true;
-  b.module.x = true;
-  assert.deepEqual(Object.keys(compare(a, b).changes).sort(), [
-    "contracts",
-    "defaults",
-    "flatDefaults",
-    "module",
-  ]);
-});
-
-test("Python assignment scanner rejects poison and records exact container/value lines", () => {
-  const source = `''' DEFAULT_CONFIG = {"bad": 1} '''\nDEFAULT_CONFIG = {\n # ] poison\n "n": 1,\n "b": True,\n "z": None,\n "a": [],\n "o": {},\n "s": "] not close"\n}\n`;
-  assert.equal(parsePyDefault(source).n, 1);
-  const clean = source.slice(source.lastIndexOf("DEFAULT_CONFIG"));
-  const flat = flatten(parsePyDefault(clean));
-  assert.deepEqual(Object.fromEntries(flat.map((x) => [x.path, x.line])), {
-    n: 3,
-    b: 4,
-    z: 5,
-    a: 6,
-    o: 7,
-    s: 8,
-  });
-  assert.throws(() => parsePyDefault('DEFAULT_CONFIG = {"x": 1} + other\n'), /trailing/);
-  assert.throws(
-    () => parsePyDefault('DEFAULT_CONFIG = {"x": "\\q"}\n'),
-    /unsupported Python escape/,
-  );
-});
-
-test("fake gh latest selects immutable HEAD and rejects a mismatch", (t) => {
-  const f = fixtures(),
-    bin = fs.mkdtempSync(path.join(os.tmpdir(), "fake-gh-")),
-    cache = fs.mkdtempSync(path.join(os.tmpdir(), "latest-cache-"));
-  t.after(() =>
-    [f.source, f.target, f.src.cache, bin, cache].forEach((p) =>
-      fs.rmSync(p, { recursive: true, force: true }),
-    ),
-  );
-  git(f.source, "commit", "--allow-empty", "-qm", "latest");
-  const latest = git(f.source, "rev-parse", "HEAD");
-  write(bin, "gh", `#!/bin/sh\nprintf '%s\\n' '${latest}'\n`, 0o755);
-  const old = process.env.PATH;
-  process.env.PATH = `${bin}:${old}`;
-  try {
-    const src = resolveSource(f.target, { source: f.source, cache, latest: true }, [
-      f.target,
-      skill,
-    ]);
-    assert.equal(src.selection, "latest");
-    assert.equal(src.lockedSha, f.sha);
-    assert.equal(src.resolvedSha, latest);
-    assert.match(src.resolvedAt, /^\d{4}-/);
-    write(bin, "gh", "#!/bin/sh\nprintf '%040d\\n' 0\n", 0o755);
-    assert.throws(
-      () => resolveSource(f.target, { source: f.source, cache, latest: true }, [f.target, skill]),
-      /does not match/,
-    );
-  } finally {
-    process.env.PATH = old;
+    ).toThrow(/outputs must be outside/);
+  for (const forbidden of [f.target, f.source]) {
+    const child = path.join(forbidden, "new", "reports");
+    expect(() =>
+      run(
+        "node",
+        [
+          cli,
+          "audit",
+          "--target-repo",
+          f.target,
+          "--host",
+          "x",
+          "--source",
+          f.source,
+          "--no-nix",
+          "--output-dir",
+          child,
+        ],
+        f.target,
+      ),
+    ).toThrow(/outputs must be outside/);
+    expect(fs.existsSync(child)).toBe(false);
   }
 });
 
-test("immutable reads ignore dirty tracked source and preserve exact citation", (t) => {
-  const f = fixtures();
-  t.after(() =>
-    [f.source, f.target, f.src.cache].forEach((p) =>
-      fs.rmSync(p, { recursive: true, force: true }),
-    ),
+test("normal backend authenticates and uses exact-ref contents API", () => {
+  const f = fixture(),
+    bin = temporaryDirectory("gh-"),
+    state = temporaryDirectory("state-"),
+    log = path.join(bin, "log");
+  run("git", ["commit", "--allow-empty", "-qm", "latest"], f.source);
+  const latestSha = run("git", ["rev-parse", "HEAD"], f.source);
+  write(
+    bin,
+    "gh",
+    `#!/bin/sh\necho "$*" >> '${log}'\n[ "$1 $2" = "auth status" ] && exit 0\n[ "$1" = "--version" ] && exit 0\n[ "$1 $2" = "search code" ] && { printf '%s' '[{"path":"hermes_cli/legacy.py"}]'; exit 0; }\ncase "$2" in *commits/HEAD*) printf '%s' '${latestSha}';; *contents*) p="${f.source}/${"$"}(printf '%s' "$2" | sed -e 's|.*contents/||' -e 's|?ref=.*||')"; base64 < "$p";; *) printf '[]';; esac\n`,
+    0o755,
   );
-  write(f.source, "hermes_cli/config_defaults.py", 'DEFAULT_CONFIG = {"dirty": true}\n');
-  const index = indexSource(f.src),
-    model = index.flatDefaults.find((x) => x.path === "model");
-  assert.equal(index.defaults.dirty, undefined);
-  assert.equal(model.evidence.line, 3);
-  assert.equal(model.evidence.excerpt, '"model": "",');
-  assert.equal(
-    model.evidence.url,
-    `https://github.com/Fixture/hermes/blob/${f.sha}/hermes_cli/config_defaults.py#L3`,
+  run("node", [cli, "audit", "--target-repo", f.target, "--host", "test", "--no-nix"], f.target, {
+    ...process.env,
+    PATH: `${bin}:${process.env.PATH}`,
+    XDG_STATE_HOME: state,
+  });
+  const lines = fs.readFileSync(log, "utf8");
+  expect(lines).toMatch(/auth status/);
+  expect(lines).toContain(`contents/hermes_cli/config_defaults.py?ref=${f.sha}`);
+  expect(lines).not.toMatch(/_\/never/);
+  expect(lines).not.toMatch(/search code/);
+  write(
+    bin,
+    "nix",
+    `#!/bin/sh\nprintf '%s' '{"available":true,"enabled":true,"mode":"generated","configFileSet":false,"nativeShape":{"enable":"<boolean>"},"applicationShape":{"model":"<string>","mystery":"<number>"}}'\n`,
+    0o755,
   );
+  const reviewed = run(
+    "node",
+    [cli, "audit", "--target-repo", f.target, "--host", "review"],
+    f.target,
+    { ...process.env, PATH: `${bin}:${process.env.PATH}`, XDG_STATE_HOME: state },
+  );
+  const reviewedDoc = JSON.parse(fs.readFileSync(reviewed.split("\n")[0]));
+  expect(reviewedDoc.comparison.applicationMismatches[0].classification).toBe(
+    "uncertain-needs-targeted-review",
+  );
+  const reviewedLog = fs.readFileSync(log, "utf8");
+  expect(reviewedLog).toMatch(/search code/);
+  expect(reviewedLog).toContain(`contents/hermes_cli/legacy.py?ref=${f.sha}`);
+  const latest = run(
+    "node",
+    [cli, "audit", "--target-repo", f.target, "--host", "latest", "--no-nix", "--latest"],
+    f.target,
+    { ...process.env, PATH: `${bin}:${process.env.PATH}`, XDG_STATE_HOME: state },
+  );
+  const latestDoc = JSON.parse(fs.readFileSync(latest.split("\n")[0]));
+  expect(latestDoc.provenance.resolvedSha).toBe(f.sha);
+  expect(latestDoc.provenance.latestSha).toBe(latestSha);
+  expect(latestDoc.applicationInventory.latestComparison).toEqual({
+    addedPaths: [],
+    changedPaths: [],
+    removedPaths: [],
+    sha: latestSha,
+  });
+  write(bin, "gh", '#!/bin/sh\n[ "$1" = --version ] && exit 0\nexit 1\n', 0o755);
+  expect(() =>
+    run("node", [cli, "audit", "--target-repo", f.target, "--host", "test", "--no-nix"], f.target, {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH}`,
+      XDG_STATE_HOME: state,
+    }),
+  ).toThrow();
 });
 
-test("audit and markdown retain uncertainty and citations without completeness claims", (t) => {
-  const f = fixtures();
-  t.after(() => {
-    fs.rmSync(f.source, { recursive: true });
-    fs.rmSync(f.target, { recursive: true });
-    fs.rmSync(f.src.cache, { recursive: true });
+test("schema top-level agrees with reports", () => {
+  const schema = JSON.parse(
+    fs.readFileSync(
+      path.resolve(here, "../../skills/auditing-hermes-config/reference/audit.schema.json"),
+    ),
+  );
+  expect(schema.required.sort()).toEqual([
+    "applicationInventory",
+    "comparison",
+    "limits",
+    "local",
+    "moduleInventory",
+    "provenance",
+    "schemaVersion",
+  ]);
+});
+
+test("comment-only migration mention is not migration evidence", () => {
+  const f = fixture({ migration: false }),
+    out = temporaryDirectory("comment-migration-");
+  const stdout = run(
+    "node",
+    [
+      cli,
+      "audit",
+      "--target-repo",
+      f.target,
+      "--host",
+      "test",
+      "--source",
+      f.source,
+      "--no-nix",
+      "--output-dir",
+      out,
+    ],
+    f.target,
+  );
+  const doc = JSON.parse(fs.readFileSync(stdout.split("\n")[0]));
+  expect(
+    doc.applicationInventory.entries.some(
+      (entry) => entry.path === "custom_providers" && entry.confidence === "explicit-migration",
+    ),
+  ).toBe(false);
+});
+
+test("markdown distinguishes unavailable application comparison", () => {
+  const text = markdown({
+    provenance: { resolvedSha: "a".repeat(40) },
+    applicationInventory: { entries: [] },
+    moduleInventory: { entries: [] },
+    comparison: {
+      available: true,
+      applicationAvailable: false,
+      applicationReason: "Hermes service is disabled",
+      applicationMismatches: [],
+      moduleMismatches: [],
+    },
+    limits: [],
   });
-  const target = resolveTarget({ "target-repo": f.target }),
-    doc = audit(target, "test", indexSource(f.src), { "no-nix": true });
-  assert.ok(doc.findings.every((x) => x.path !== "$unresolved"));
-  assert.match(markdown(doc), /## Proper/);
-  assert.match(markdown(doc), /## Repo today/);
-  assert.match(markdown(doc), /## Gap/);
-  assert.match(markdown(doc), /## Path/);
+  expect(text).toContain("Application comparison: unavailable (Hermes service is disabled)");
+  expect(text).toContain("## Application mismatches\nNot evaluated.");
+  expect(text).toContain("## Native mismatches\nNone.");
 });

@@ -1,26 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.invalid/hermes-config-audit.schema.json",
   "type": "object",
+  "additionalProperties": false,
   "required": [
     "schemaVersion",
-    "command",
-    "generatedAt",
-    "readOnly",
     "provenance",
-    "surfaces",
-    "findings",
-    "moduleSummary",
-    "limits",
-    "safety"
+    "applicationInventory",
+    "moduleInventory",
+    "local",
+    "comparison",
+    "limits"
   ],
   "properties": {
-    "schemaVersion": { "const": 4 },
-    "command": { "const": "audit" },
-    "generatedAt": { "type": "string", "format": "date-time" },
-    "readOnly": { "const": true },
+    "schemaVersion": { "const": 5 },
     "provenance": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "selection",
         "lockedSha",
@@ -28,8 +23,8 @@
         "owner",
         "repo",
         "targetRepo",
-        "targetDirty",
-        "host"
+        "host",
+        "backend"
       ],
       "properties": {
         "selection": { "enum": ["locked", "latest"] },
@@ -38,84 +33,122 @@
         "owner": { "type": "string", "minLength": 1 },
         "repo": { "type": "string", "minLength": 1 },
         "targetRepo": { "type": "string", "minLength": 1 },
-        "targetDirty": { "type": "boolean" },
         "host": { "type": "string", "minLength": 1 },
+        "backend": { "enum": ["gh-api", "git-object"] },
+        "latestSha": { "$ref": "#/$defs/sha" },
         "resolvedAt": { "type": "string", "format": "date-time" }
-      },
-      "allOf": [
+      }
+    },
+    "applicationInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries", "diagnostics", "completeness"],
+      "properties": {
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/applicationEntry" } },
+        "diagnostics": { "type": "array", "items": { "type": "string" } },
+        "completeness": { "type": "string" },
+        "latestComparison": { "$ref": "#/$defs/latestComparison" }
+      }
+    },
+    "moduleInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries", "completeness"],
+      "properties": {
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/moduleEntry" } },
+        "completeness": { "type": "string" },
+        "latestComparison": { "$ref": "#/$defs/latestComparison" }
+      }
+    },
+    "local": {
+      "oneOf": [
         {
-          "if": { "properties": { "selection": { "const": "latest" } } },
-          "then": { "required": ["resolvedAt"] }
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["available", "reason"],
+          "properties": { "available": { "const": false }, "reason": { "type": "string" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "available",
+            "enabled",
+            "mode",
+            "configFileSet",
+            "nativeShape",
+            "applicationShape"
+          ],
+          "properties": {
+            "available": { "const": true },
+            "enabled": { "type": "boolean" },
+            "mode": { "enum": ["disabled", "generated", "configFile"] },
+            "configFileSet": { "type": "boolean" },
+            "nativeShape": { "type": "object" },
+            "applicationShape": { "type": ["object", "null"] }
+          }
         }
       ]
     },
-    "surfaces": {
-      "type": "object",
-      "required": ["runtime", "module", "host"],
-      "properties": {
-        "runtime": {
+    "comparison": {
+      "oneOf": [
+        {
           "type": "object",
-          "required": ["contracts", "defaultCount"],
-          "properties": {
-            "contracts": { "type": "object" },
-            "defaultCount": { "type": "integer", "minimum": 0 }
-          }
+          "additionalProperties": false,
+          "required": ["available", "reason"],
+          "properties": { "available": { "const": false }, "reason": { "type": "string" } }
         },
-        "module": {
+        {
           "type": "object",
+          "additionalProperties": false,
           "required": [
-            "source",
-            "optionCount",
-            "options",
-            "completeness",
-            "diagnostics",
-            "generation"
+            "available",
+            "applicationAvailable",
+            "presentInGeneratedOverride",
+            "catalogPathsAbsentFromGeneratedOverride",
+            "applicationMismatches",
+            "presentInEvaluatedNativeShape",
+            "catalogPathsAbsentFromEvaluatedNativeShape",
+            "moduleMismatches"
           ],
           "properties": {
-            "source": { "type": "string" },
-            "optionCount": { "type": "integer" },
-            "options": { "type": "array", "items": { "$ref": "#/$defs/option" } },
-            "completeness": { "type": "string" },
-            "diagnostics": { "type": "array", "items": { "type": "string" } },
-            "generation": { "type": "object" }
+            "available": { "const": true },
+            "applicationAvailable": { "type": "boolean" },
+            "applicationReason": { "type": "string" },
+            "presentInGeneratedOverride": { "type": "array", "items": { "type": "string" } },
+            "catalogPathsAbsentFromGeneratedOverride": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "applicationMismatches": { "type": "array", "items": { "$ref": "#/$defs/mismatch" } },
+            "presentInEvaluatedNativeShape": { "type": "array", "items": { "type": "string" } },
+            "catalogPathsAbsentFromEvaluatedNativeShape": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "moduleMismatches": { "type": "array", "items": { "$ref": "#/$defs/mismatch" } }
           }
-        },
-        "host": {
-          "type": "object",
-          "required": [
-            "host",
-            "provenance",
-            "evaluated",
-            "runtimeDocument",
-            "moduleValues",
-            "localAssignments",
-            "mode",
-            "settingsEmpty",
-            "configFileBypassesSettings",
-            "limits"
-          ]
         }
-      }
+      ]
     },
-    "findings": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/finding" }
-    },
-    "moduleSummary": {
-      "type": "object",
-      "required": ["effectiveTopLevelValues", "optionCoverage"],
-      "properties": {
-        "effectiveTopLevelValues": { "type": "array" },
-        "optionCoverage": { "const": "unavailable" }
-      }
-    },
-    "limits": { "type": "array", "items": { "type": "string" } },
-    "safety": { "type": "object", "required": ["performed", "forbidden"] }
+    "limits": { "type": "array", "items": { "type": "string" } }
   },
   "$defs": {
     "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "latestComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "addedPaths", "removedPaths", "changedPaths"],
+      "properties": {
+        "sha": { "$ref": "#/$defs/sha" },
+        "addedPaths": { "type": "array", "items": { "type": "string" } },
+        "removedPaths": { "type": "array", "items": { "type": "string" } },
+        "changedPaths": { "type": "array", "items": { "type": "string" } }
+      }
+    },
     "evidence": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["source", "line", "url", "excerpt"],
       "properties": {
         "source": { "type": "string" },
@@ -124,41 +157,71 @@
         "excerpt": { "type": "string" }
       }
     },
-    "option": {
+    "applicationEntry": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "path",
-        "typeExpression",
-        "default",
-        "example",
-        "description",
-        "declaration",
-        "mappingEvidence"
+        "expected",
+        "condition",
+        "dynamic",
+        "confidence",
+        "migration",
+        "evidence"
       ],
       "properties": {
         "path": { "type": "string" },
-        "typeExpression": { "type": ["string", "null"] },
-        "declaration": { "$ref": "#/$defs/evidence" },
-        "mappingEvidence": { "type": "array" }
+        "default": {},
+        "defaultShape": { "type": "string" },
+        "expected": { "type": "string" },
+        "condition": { "type": "string" },
+        "dynamic": { "type": "boolean" },
+        "confidence": {
+          "enum": [
+            "base-default",
+            "known-consumed-field",
+            "validation-open-dictionary",
+            "explicit-migration"
+          ]
+        },
+        "migration": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/evidence" }
       }
     },
-    "finding": {
+    "moduleEntry": {
       "type": "object",
-      "required": ["path", "classification", "reason"],
+      "additionalProperties": false,
+      "required": ["path", "type", "default", "example", "description", "mapping", "evidence"],
       "properties": {
         "path": { "type": "string" },
+        "type": { "type": ["string", "null"] },
+        "default": {},
+        "example": {},
+        "description": { "type": ["string", "null"] },
+        "mapping": {
+          "enum": ["service-behavior", "generates-application-config", "selects-application-config"]
+        },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "mismatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "type", "classification"],
+      "properties": {
+        "path": { "type": "string" },
+        "type": { "type": "string" },
+        "expected": { "type": "string" },
         "classification": {
           "enum": [
-            "current",
-            "valid-dynamic-extension",
-            "obsolete-or-wrong-shape",
-            "ignored-or-nonexistent",
-            "intentional-semantic-exception",
+            "wrong-shape",
+            "deprecated-or-migrated",
+            "invalid-or-ignored",
             "uncertain-needs-targeted-review"
           ]
         },
-        "reason": { "type": "string" },
-        "evidence": { "$ref": "#/$defs/evidence" }
+        "evidence": { "$ref": "#/$defs/evidence" },
+        "candidates": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
       }
     }
   }
