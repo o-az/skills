@@ -2,4 +2,6 @@
 
 set -euo pipefail
 
+# Amp Orbs setup
+
 echo "No persistent services require resume"
