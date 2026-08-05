@@ -11,29 +11,10 @@ export DISABLE_TELEMETRY=1
 export MISE_EXPERIMENTAL=true
 export MISE_HTTP_TIMEOUT=120
 
-if ! command -v shellcheck >/dev/null 2>&1; then
-	echo "Installing system packages"
-	apt=(apt-get)
-	if ((EUID != 0)); then
-		if ! command -v sudo >/dev/null 2>&1; then
-			echo "shellcheck is required, but setup cannot run apt-get as root" >&2
-			exit 1
-		fi
-		apt=(sudo apt-get)
-	fi
-	"${apt[@]}" update
-	"${apt[@]}" install -y shellcheck
-fi
-
 echo "Installing mise"
-if command -v mise >/dev/null 2>&1; then
-	mise_bin="$(command -v mise)"
-else
-	installer="$(mktemp)"
-	trap 'rm -f "$installer"' EXIT
-	curl --fail --silent --show-error --location https://mise.run --output "$installer"
-	bash "$installer"
-	mise_bin="$HOME/.local/bin/mise"
+mise_bin="$HOME/.local/bin/mise"
+if [[ ! -x "$mise_bin" ]]; then
+	curl https://mise.run/bash | sh
 fi
 
 if [[ ! -x "$mise_bin" ]]; then
@@ -41,24 +22,15 @@ if [[ ! -x "$mise_bin" ]]; then
 	exit 1
 fi
 
-profile_marker="# skills orb setup: activate mise"
-if ! grep -Fqx "$profile_marker" "$HOME/.bash_profile" 2>/dev/null; then
-	cat >>"$HOME/.bash_profile" <<EOF
-
-$profile_marker
-if [[ -x "$mise_bin" ]]; then
-	eval "\$("$mise_bin" activate bash)"
-fi
-EOF
-fi
+"$mise_bin" trust "$repo_root/mise.toml"
+eval "$("$mise_bin" activate bash)"
 
 echo "Installing repository toolchains"
-"$mise_bin" trust "$repo_root/mise.toml"
-"$mise_bin" install
+mise install
 
 echo "Installing locked dependencies"
-"$mise_bin" exec -- bun install --frozen-lockfile
-"$mise_bin" exec -- uv sync --frozen
+mise exec -- bun install --frozen-lockfile
+mise exec -- uv sync --frozen
 
 if [[ ! -f .env ]]; then
 	cp -- .env.example .env
