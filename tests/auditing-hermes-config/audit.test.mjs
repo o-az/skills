@@ -8,7 +8,7 @@ import {
   parsePyDefault,
 } from "../../skills/auditing-hermes-config/scripts/hermes-config-audit.mjs";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
+const here = import.meta.dirname;
 const cli = path.resolve(
   here,
   "../../skills/auditing-hermes-config/scripts/hermes-config-audit.mjs",
@@ -21,13 +21,16 @@ const temporaryDirectory = (prefix) => {
   return root;
 };
 afterEach(() => {
-  for (const root of temporaryRoots) fs.rmSync(root, { recursive: true, force: true });
+  for (const root of temporaryRoots) {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
   temporaryRoots.clear();
 });
 const run = (cmd, args, cwd, env) => {
-  const result = Bun.spawnSync([cmd, ...args], { cwd, env, stdout: "pipe", stderr: "pipe" });
-  if (!result.success)
+  const result = Bun.spawnSync([cmd, ...args], { cwd, env, stderr: "pipe", stdout: "pipe" });
+  if (!result.success) {
     throw new Error(result.stderr.toString().trim() || `${cmd} exited ${result.exitCode}`);
+  }
   return result.stdout.toString().trim();
 };
 const write = (root, rel, body, mode) => {
@@ -38,8 +41,9 @@ const write = (root, rel, body, mode) => {
 };
 
 function validateSchema(value, schema, root = schema, where = "$") {
-  if (schema.$ref)
+  if (schema.$ref) {
     return validateSchema(value, root.$defs[schema.$ref.split("/").at(-1)], root, where);
+  }
   if (schema.oneOf) {
     const matches = schema.oneOf.filter((candidate) => {
       try {
@@ -49,11 +53,17 @@ function validateSchema(value, schema, root = schema, where = "$") {
         return false;
       }
     });
-    if (matches.length !== 1) throw new Error(`${where} oneOf`);
+    if (matches.length !== 1) {
+      throw new Error(`${where} oneOf`);
+    }
     return;
   }
-  if (schema.const !== undefined && value !== schema.const) throw new Error(`${where} const`);
-  if (schema.enum && !schema.enum.includes(value)) throw new Error(`${where} enum`);
+  if (schema.const !== undefined && value !== schema.const) {
+    throw new Error(`${where} const`);
+  }
+  if (schema.enum && !schema.enum.includes(value)) {
+    throw new Error(`${where} enum`);
+  }
   if (schema.type) {
     const actual =
       value === null
@@ -63,27 +73,41 @@ function validateSchema(value, schema, root = schema, where = "$") {
           : Number.isInteger(value)
             ? "integer"
             : typeof value;
-    if (![schema.type].flat().includes(actual)) throw new Error(`${where} type ${actual}`);
+    if (![schema.type].flat().includes(actual)) {
+      throw new Error(`${where} type ${actual}`);
+    }
   }
   if (schema.pattern) {
-    if (schema.pattern !== "^[0-9a-f]{40}$") throw new Error(`${where} unsupported pattern`);
-    if (!/^[0-9a-f]{40}$/.test(value)) throw new Error(`${where} pattern`);
+    if (schema.pattern !== "^[0-9a-f]{40}$") {
+      throw new Error(`${where} unsupported pattern`);
+    }
+    if (!/^[0-9a-f]{40}$/.test(value)) {
+      throw new Error(`${where} pattern`);
+    }
   }
-  if (schema.minimum !== undefined && value < schema.minimum) throw new Error(`${where} minimum`);
-  if (schema.minLength !== undefined && value.length < schema.minLength)
+  if (schema.minimum !== undefined && value < schema.minimum) {
+    throw new Error(`${where} minimum`);
+  }
+  if (schema.minLength !== undefined && value.length < schema.minLength) {
     throw new Error(`${where} minLength`);
-  if (schema.format === "date-time" && Number.isNaN(Date.parse(value)))
+  }
+  if (schema.format === "date-time" && Number.isNaN(Date.parse(value))) {
     throw new Error(`${where} format`);
-  for (const key of schema.required || [])
+  }
+  for (const key of schema.required || []) {
     if (!Object.hasOwn(value, key)) throw new Error(`${where}.${key} required`);
-  if (schema.additionalProperties === false)
+  }
+  if (schema.additionalProperties === false) {
     for (const key of Object.keys(value))
       if (!Object.hasOwn(schema.properties || {}, key))
         throw new Error(`${where}.${key} additional`);
-  for (const [key, child] of Object.entries(schema.properties || {}))
+  }
+  for (const [key, child] of Object.entries(schema.properties || {})) {
     if (Object.hasOwn(value, key)) validateSchema(value[key], child, root, `${where}.${key}`);
-  if (schema.items)
+  }
+  if (schema.items) {
     value.forEach((item, index) => validateSchema(item, schema.items, root, `${where}[${index}]`));
+  }
 }
 
 function repo(files) {
@@ -91,8 +115,9 @@ function repo(files) {
   run("git", ["init", "-q"], root);
   run("git", ["config", "user.email", "x@y.invalid"], root);
   run("git", ["config", "user.name", "x"], root);
-  for (const [p, x] of Object.entries(files))
+  for (const [p, x] of Object.entries(files)) {
     write(root, p, typeof x === "string" ? x.replaceAll("\\n", "\n") : x);
+  }
   run("git", ["add", "."], root);
   run("git", ["commit", "-qm", "fixture"], root);
   return root;
@@ -123,13 +148,13 @@ const moduleNix = `{ lib, ... }: { options.services.hermes-agent = {
 }; }`;
 function fixture({ migration = true } = {}) {
   const source = repo({
-    "hermes_cli/config_defaults.py": defaults,
+    "_/never": "secret",
     "hermes_cli/config.py": `_OPEN_DICT_TOP_LEVEL_KEYS = {"extensions"}\n_PLATFORM_CONTAINER_KEYS = {"discord"}\nDISCORD_KNOWN_FIELDS = {"token", "tools"}\ndef _normalize_custom_provider_entry(entry):\n  _KNOWN_KEYS = {"base_url", "api_key"}\n  _CAMEL_ALIASES = {"baseUrl": "base_url"}\n  return {key: value for key, value in entry.items() if key in _KNOWN_KEYS}\n`,
+    "hermes_cli/config_defaults.py": defaults,
     "hermes_cli/config_migrations.py": "# deprecated custom_providers are migrated to providers\n",
+    "hermes_cli/legacy.py": "# deprecated mystery was renamed\n",
     "hermes_cli/mcp_config.py": 'MCP_SERVER_KN_FIELDS = {"command", "tools"}\n',
     "nix/nixosModules.nix": moduleNix,
-    "hermes_cli/legacy.py": "# deprecated mystery was renamed\n",
-    "_/never": "secret",
   });
   write(
     source,
@@ -155,7 +180,7 @@ def _normalize_custom_provider_entry(entry):
   return config.get("connect_timeout", 30), config.get("tools")
 `,
   );
-  if (migration)
+  if (migration) {
     write(
       source,
       "hermes_cli/config_migrations.py",
@@ -164,17 +189,18 @@ config["providers"] = providers_dict
 config.pop("custom_providers", None)
 `,
     );
+  }
   run("git", ["add", "."], source);
   run("git", ["commit", "-qm", "realistic forms"], source);
   const sha = run("git", ["rev-parse", "HEAD"], source);
   const target = repo({
     "flake.lock": JSON.stringify({
       nodes: {
-        "hermes-agent": { locked: { type: "github", owner: "acme", repo: "hermes", rev: sha } },
+        "hermes-agent": { locked: { owner: "acme", repo: "hermes", rev: sha, type: "github" } },
       },
     }),
   });
-  return { source, sha, target };
+  return { sha, source, target };
 }
 
 test("safe literal parser does not execute Python", () => {
@@ -185,7 +211,7 @@ test("safe literal parser does not execute Python", () => {
   expect(parsed.x).toBe(8);
   expect(parsed.s).toBe("a\n");
   expect(parsePyDefault('X: set[str] = frozenset({"a", "b"})\n', "X")).toEqual(new Set(["a", "b"]));
-  expect(parsePyDefault('DEFAULT_CONFIG = {"x": "\\u2589", "y": "\\x41"}')).toEqual({
+  expect(parsePyDefault(String.raw`DEFAULT_CONFIG = {"x": "\u2589", "y": "\x41"}`)).toEqual({
     x: "▉",
     y: "A",
   });
@@ -281,7 +307,7 @@ test("offline exact object audit catalogs, compares, evaluates once, and writes 
   ).toBe("deprecated-or-migrated");
   expect(fs.readFileSync(calls, "utf8").trim()).toBe("CALL");
   const invocation = fs.readFileSync(nixArgs, "utf8");
-  expect(invocation).toMatch(/--offline --no-update-lock-file/);
+  expect(invocation).toMatch(/--offline --no-write-lock-file/);
   expect(invocation).toMatch(/allow-import-from-derivation false/);
   expect(invocation).toMatch(/builtins\.getAttr "test"/);
   expect(fs.statSync(json).mode & 0o777).toBe(0o600);
@@ -289,13 +315,15 @@ test("offline exact object audit catalogs, compares, evaluates once, and writes 
   expect(Object.keys(doc).sort()).toEqual([
     "applicationInventory",
     "comparison",
+    "completeness",
     "limits",
     "local",
     "moduleInventory",
     "provenance",
+    "requests",
     "schemaVersion",
   ]);
-  for (const forbidden of [f.target, f.source])
+  for (const forbidden of [f.target, f.source]) {
     expect(() =>
       run(
         "node",
@@ -315,6 +343,7 @@ test("offline exact object audit catalogs, compares, evaluates once, and writes 
         f.target,
       ),
     ).toThrow(/outputs must be outside/);
+  }
   for (const forbidden of [f.target, f.source]) {
     const child = path.join(forbidden, "new", "reports");
     expect(() =>
@@ -380,8 +409,8 @@ test("normal backend authenticates and uses exact-ref contents API", () => {
     "uncertain-needs-targeted-review",
   );
   const reviewedLog = fs.readFileSync(log, "utf8");
-  expect(reviewedLog).toMatch(/search code/);
-  expect(reviewedLog).toContain(`contents/hermes_cli/legacy.py?ref=${f.sha}`);
+  expect(reviewedLog).not.toMatch(/search code/);
+  expect(reviewedLog).not.toContain(`contents/hermes_cli/legacy.py?ref=${f.sha}`);
   const latest = run(
     "node",
     [cli, "audit", "--target-repo", f.target, "--host", "latest", "--no-nix", "--latest"],
@@ -416,10 +445,12 @@ test("schema top-level agrees with reports", () => {
   expect(schema.required.sort()).toEqual([
     "applicationInventory",
     "comparison",
+    "completeness",
     "limits",
     "local",
     "moduleInventory",
     "provenance",
+    "requests",
     "schemaVersion",
   ]);
 });
@@ -454,19 +485,19 @@ test("comment-only migration mention is not migration evidence", () => {
 
 test("markdown distinguishes unavailable application comparison", () => {
   const text = markdown({
-    provenance: { resolvedSha: "a".repeat(40) },
     applicationInventory: { entries: [] },
-    moduleInventory: { entries: [] },
     comparison: {
-      available: true,
       applicationAvailable: false,
-      applicationReason: "Hermes service is disabled",
       applicationMismatches: [],
+      applicationReason: "Hermes service is disabled",
+      available: true,
       moduleMismatches: [],
     },
     limits: [],
+    moduleInventory: { entries: [] },
+    provenance: { resolvedSha: "a".repeat(40) },
   });
   expect(text).toContain("Application comparison: unavailable (Hermes service is disabled)");
-  expect(text).toContain("## Application mismatches\nNot evaluated.");
+  expect(text).toContain("## Genuinely uncertain\nNot evaluated.");
   expect(text).toContain("## Native mismatches\nNone.");
 });

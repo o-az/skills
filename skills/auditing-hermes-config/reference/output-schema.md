@@ -10,8 +10,10 @@ The JSON report uses `schemaVersion: 5` and has exactly these top-level fields:
   or an
   unavailable reason
 - `comparison`: catalog paths present or absent in the evaluated shapes plus
-  application/module mismatches; it does not claim which values were explicitly
-  assigned by local source
+  all classified application paths and application/module mismatches; it does
+  not claim which values were explicitly assigned by local source
+- `completeness`: explicit overall, local-comparison, and inventory status
+- `requests`: GitHub API and code-search request counts
 - `limits`: unresolved and completeness qualifications
 
 Application entries include path, default and observed default shape where

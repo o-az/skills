@@ -18,12 +18,14 @@ The audit keeps three surfaces separate:
 Normal source reads use GitHub contents endpoints with `?ref=<exact SHA>`.
 Offline reads use `git show SHA:path`; source HEAD is irrelevant. Every citation
 contains the SHA. Paths with a component exactly `_` are refused. Python source
-is parsed only by a targeted literal extractor and is never executed.
+is parsed as syntax with Python's standard `ast` module and is never executed.
 
 Comparisons are conservative. Unknown paths become
 `uncertain-needs-targeted-review`; stronger labels require exact-SHA source
-proof. GitHub code search is used only for mismatches and is only discovery:
-search results are never exact-revision evidence.
+proof. The normal audit does not use GitHub code search: exact-path defaults,
+known structural containers, and a small pinned set of direct consumers and
+official docs are compared first. Any future search result is discovery only
+and cannot replace exact-revision evidence.
 
 The generated override is not the final on-disk configuration: pure evaluation
 cannot observe activation-time merging with mutable YAML. Catalog paths absent

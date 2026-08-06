@@ -9,6 +9,8 @@
     "moduleInventory",
     "local",
     "comparison",
+    "completeness",
+    "requests",
     "limits"
   ],
   "properties": {
@@ -105,6 +107,7 @@
             "available",
             "applicationAvailable",
             "presentInGeneratedOverride",
+            "applicationResults",
             "catalogPathsAbsentFromGeneratedOverride",
             "applicationMismatches",
             "presentInEvaluatedNativeShape",
@@ -116,6 +119,7 @@
             "applicationAvailable": { "type": "boolean" },
             "applicationReason": { "type": "string" },
             "presentInGeneratedOverride": { "type": "array", "items": { "type": "string" } },
+            "applicationResults": { "type": "array", "items": { "$ref": "#/$defs/mismatch" } },
             "catalogPathsAbsentFromGeneratedOverride": {
               "type": "array",
               "items": { "type": "string" }
@@ -130,6 +134,25 @@
           }
         }
       ]
+    },
+    "completeness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["overall", "localComparison", "inventory"],
+      "properties": {
+        "overall": { "type": "string" },
+        "localComparison": { "type": "string" },
+        "inventory": { "type": "string" }
+      }
+    },
+    "requests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["githubApi", "githubSearch"],
+      "properties": {
+        "githubApi": { "type": "integer", "minimum": 0 },
+        "githubSearch": { "type": "integer", "minimum": 0 }
+      }
     },
     "limits": { "type": "array", "items": { "type": "string" } }
   },
@@ -181,7 +204,8 @@
             "base-default",
             "known-consumed-field",
             "validation-open-dictionary",
-            "explicit-migration"
+            "explicit-migration",
+            "explicit-invalid-shape"
           ]
         },
         "migration": { "type": "string" },
@@ -214,9 +238,13 @@
         "expected": { "type": "string" },
         "classification": {
           "enum": [
+            "current",
+            "valid-dynamic-extension",
             "wrong-shape",
             "deprecated-or-migrated",
+            "obsolete-or-wrong-shape",
             "invalid-or-ignored",
+            "ignored-or-nonexistent",
             "uncertain-needs-targeted-review"
           ]
         },
