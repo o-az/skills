@@ -7,10 +7,13 @@
 
 import argparse
 import ipaddress
+import json
 import os
 import re
 import shutil
 import socket
+import subprocess
+import sys
 import unicodedata
 from http.client import HTTPMessage
 from pathlib import Path
@@ -21,6 +24,8 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from cleanup import validate_workdir
 
 DIRECT_VIDEO_SUFFIXES = {".mov", ".mp4"}
+PLATFORM_FORMAT = "bestvideo+bestaudio/best[vcodec!=none][acodec!=none]"
+AUDIO_FALLBACK_FORMAT = "best[vcodec!=none][acodec!=none]"
 
 
 def validate_video_url(url: str) -> str:
@@ -141,9 +146,12 @@ class LiveStreamFilter:
 
 
 def download_options(
-    workdir: Path, match_filter: LiveStreamFilter | None = None
+    workdir: Path,
+    match_filter: LiveStreamFilter | None = None,
+    format_selector: str = PLATFORM_FORMAT,
 ) -> dict[str, object]:
     options: dict[str, object] = {
+        "format": format_selector,
         "noplaylist": True,
         "merge_output_format": "mp4",
         "outtmpl": {"default": str(workdir / "%(title).120B [%(id)s].%(ext)s")},
@@ -156,12 +164,49 @@ def download_options(
     return options
 
 
-def download_platform_video(url: str, workdir: Path) -> Path:
+def has_audio_stream(video: Path) -> bool:
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "a",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "json",
+            str(video),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "unknown ffprobe error"
+        raise RuntimeError(f"Could not inspect downloaded video: {detail}")
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("ffprobe returned invalid JSON") from error
+    streams = payload.get("streams")
+    if not isinstance(streams, list):
+        raise TypeError("ffprobe did not return a stream list")
+    return any(
+        isinstance(stream, dict) and stream.get("codec_type") == "audio"
+        for stream in streams
+    )
+
+
+def download_platform_format(
+    url: str, workdir: Path, format_selector: str
+) -> Path:
     from yt_dlp import YoutubeDL
 
     final_paths: list[str] = []
     live_filter = LiveStreamFilter()
-    with YoutubeDL(download_options(workdir, live_filter)) as downloader:
+    options = download_options(workdir, live_filter, format_selector)
+    with YoutubeDL(options) as downloader:
         downloader.add_post_hook(final_paths.append)
         downloader.extract_info(url, download=True)
 
@@ -174,6 +219,29 @@ def download_platform_video(url: str, workdir: Path) -> Path:
     if not downloaded.is_file() or not downloaded.is_relative_to(workdir):
         raise RuntimeError("Downloaded video is outside the work directory")
     return downloaded
+
+
+def download_platform_video(url: str, workdir: Path) -> Path:
+    downloaded = download_platform_format(url, workdir, PLATFORM_FORMAT)
+    if has_audio_stream(downloaded):
+        return downloaded
+
+    downloaded.unlink()
+    print(
+        "The selected platform format had no audio; retrying with an "
+        "explicitly audio-containing format.",
+        file=sys.stderr,
+    )
+    downloaded = download_platform_format(url, workdir, AUDIO_FALLBACK_FORMAT)
+    if has_audio_stream(downloaded):
+        return downloaded
+
+    raise RuntimeError(
+        "The downloaded file has no audio stream after retrying an "
+        "audio-required yt-dlp format. This does not establish that the "
+        "user's source video has no audio; the platform extractor or its "
+        "available formats may have omitted it."
+    )
 
 
 def download_video(url: str, workdir: Path) -> Path:

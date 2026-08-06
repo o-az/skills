@@ -12,10 +12,12 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from http.client import HTTPMessage
 from pathlib import Path
 from types import SimpleNamespace
+from typing import ClassVar, Self
 from unittest.mock import MagicMock, patch
 from urllib.request import Request
 
@@ -35,12 +37,16 @@ from deliver import (
     normalized_language_code,
 )
 from download import (
+    AUDIO_FALLBACK_FORMAT,
+    PLATFORM_FORMAT,
     LiveStreamFilter,
     PublicRedirectHandler,
     direct_video_stem,
     direct_video_suffix,
     download_options,
+    download_platform_video,
     download_video,
+    has_audio_stream,
     reject_live_video,
     validate_video_url,
 )
@@ -241,6 +247,7 @@ for unsafe_url in (
 
 download_workdir = Path("/tmp/caption-video.test")
 options = download_options(download_workdir)
+assert options["format"] == PLATFORM_FORMAT
 assert options["noplaylist"] is True
 assert options["merge_output_format"] == "mp4"
 assert options["outtmpl"] == {
@@ -260,6 +267,61 @@ assert reject_live_video({"live_status": "is_upcoming"}) == (
     "Live streams are not supported"
 )
 assert reject_live_video({"live_status": "was_live"}) is None
+
+audio_probe = subprocess.CompletedProcess(
+    args=[],
+    returncode=0,
+    stdout=json.dumps({"streams": [{"codec_type": "audio"}]}),
+    stderr="",
+)
+with patch("download.subprocess.run", return_value=audio_probe) as run_probe:
+    assert has_audio_stream(Path("downloaded.mp4")) is True
+    assert run_probe.call_args.args[0][0] == "ffprobe"
+
+
+class FakeYoutubeDL:
+    selected_formats: ClassVar[list[str]] = []
+
+    def __init__(self, options: dict[str, object]) -> None:
+        self.options = options
+        self.post_hook: Callable[[str], None] | None = None
+        self.selected_formats.append(str(options["format"]))
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        del args
+
+    def add_post_hook(self, hook: Callable[[str], None]) -> None:
+        self.post_hook = hook
+
+    def extract_info(self, url: str, download: bool) -> None:
+        del url
+        assert download is True
+        assert self.post_hook is not None
+        output_template = self.options["outtmpl"]
+        assert isinstance(output_template, dict)
+        output = Path(str(output_template["default"])).parent / "video.mp4"
+        output.write_bytes(b"video")
+        self.post_hook(str(output))
+
+
+with tempfile.TemporaryDirectory() as temporary_directory:
+    retry_workdir = create_workdir(Path(temporary_directory))
+    fake_yt_dlp = SimpleNamespace(YoutubeDL=FakeYoutubeDL)
+    with (
+        patch.dict(sys.modules, {"yt_dlp": fake_yt_dlp}),
+        patch("download.has_audio_stream", side_effect=[False, True]),
+    ):
+        retried_download = download_platform_video(
+            "https://example.com/watch/123", retry_workdir
+        )
+    assert retried_download.read_bytes() == b"video"
+    assert FakeYoutubeDL.selected_formats == [
+        PLATFORM_FORMAT,
+        AUDIO_FALLBACK_FORMAT,
+    ]
 
 try:
     PublicRedirectHandler().redirect_request(
