@@ -3,7 +3,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import cp from "node:child_process";
-import { fileURLToPath } from "node:url";
 
 const SKILL = path.resolve(import.meta.dirname, "..");
 const SKILLS_REPO = path.resolve(SKILL, "../..");
@@ -18,6 +17,8 @@ const TARGETED = [
   "plugins/platforms/whatsapp/adapter.py",
   "hermes_cli/skills_config.py",
   "website/docs/user-guide/configuring-models.md",
+  "hermes_cli/cli_commands_mixin.py",
+  "website/docs/user-guide/messaging/index.md",
 ];
 
 const runRaw = (cmd, args, options = {}) =>
@@ -481,6 +482,28 @@ function applicationInventory(files, provenance) {
     expected: "array of skill names (a scalar is also normalized as one name)",
   });
   addContract(
+    "agent.reasoning_effort",
+    TARGETED[9],
+    'save_config_value("agent.reasoning_effort", arg)',
+    {
+      expected: "reasoning level string",
+      condition: "when a persistent global reasoning level is configured",
+    },
+  );
+  addContract(
+    "display.background_process_notifications",
+    TARGETED[10],
+    "`display.background_process_notifications`",
+    {
+      expected: "all, result, error, off, or false",
+      condition: "when gateway background-process notifications are configured",
+    },
+  );
+  addContract("plugins.disabled", TARGETED[2], 'plugins_cfg.get("disabled", [])', {
+    expected: "array of plugin names",
+    condition: "when plugins are explicitly denied",
+  });
+  addContract(
     "platforms.<name>.enabled",
     TARGETED[5],
     'plat_data["enabled"] = platform_cfg["enabled"]',
@@ -493,7 +516,11 @@ function applicationInventory(files, provenance) {
     ["require_mention", 'if "require_mention" in platform_cfg:', "boolean"],
     ["send_read_receipts", 'if "send_read_receipts" in platform_cfg:', "boolean"],
     ["group_policy", 'if "group_policy" in platform_cfg:', "string policy"],
-    ["group_allow_from", 'if "group_allow_from" in platform_cfg:', "array of group identifiers"],
+    [
+      "group_allow_from",
+      'if "group_allow_from" in platform_cfg:',
+      "array or comma-separated string of group identifiers",
+    ],
   ]) {
     addContract(`platforms.whatsapp.${field}`, TARGETED[5], needle, {
       expected,
@@ -501,7 +528,7 @@ function applicationInventory(files, provenance) {
     });
   }
   for (const field of ["text_batch_delay_seconds", "text_batch_split_delay_seconds"]) {
-    addContract(`platforms.whatsapp.extra.${field}`, TARGETED[6], `\"${field}\",`, {
+    addContract(`platforms.whatsapp.extra.${field}`, TARGETED[6], `"${field}",`, {
       expected: "number of seconds",
       condition: "when WhatsApp text batching is configured",
     });
@@ -1033,8 +1060,14 @@ export function audit(options) {
       module.completeness,
       ...(local.available
         ? [
-            "The local application surface is the Nix-generated override shape, not the final mutable config.yaml.",
-            "configFile contents are unresolved without realization.",
+            ...(local.applicationShape
+              ? [
+                  "The local application surface is the Nix-generated override shape, not the final mutable config.yaml.",
+                ]
+              : []),
+            ...(local.configFileSet
+              ? ["configFile contents are unresolved without realization."]
+              : []),
           ]
         : [local.reason]),
     ],
