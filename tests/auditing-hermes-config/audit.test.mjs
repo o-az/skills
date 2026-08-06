@@ -3,8 +3,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  enumerateGitHubTree,
   markdown,
   parsePyDefault,
+  resolveSourceRoles,
+  sourceRoleCoverageGap,
 } from "../../skills/auditing-hermes-config/scripts/hermes-config-audit.mjs";
 
 const here = import.meta.dirname;
@@ -168,6 +171,9 @@ def _normalize_custom_provider_entry(entry):
   if "api_key_env" in entry and "key_env" not in entry:
     entry["key_env"] = entry["api_key_env"]
   return {key: value for key, value in entry.items() if key in _KNOWN_KEYS}
+def _deep_merge(result, key, value):
+  if isinstance(result[key], dict) and value is None:
+    return result
 `,
   );
   write(
@@ -186,6 +192,7 @@ def _normalize_custom_provider_entry(entry):
       `custom_list = config.get("custom_providers")
 config["providers"] = providers_dict
 config.pop("custom_providers", None)
+disabled = plugins_cfg.get("disabled", [])
 `,
     );
   }
@@ -200,6 +207,22 @@ config.pop("custom_providers", None)
     }),
   });
   return { sha, source, target };
+}
+
+function repin(f) {
+  f.sha = run("git", ["rev-parse", "HEAD"], f.source);
+  fs.writeFileSync(
+    path.join(f.target, "flake.lock"),
+    JSON.stringify({
+      nodes: {
+        "hermes-agent": {
+          locked: { owner: "acme", repo: "hermes", rev: f.sha, type: "github" },
+        },
+      },
+    }),
+  );
+  run("git", ["add", "flake.lock"], f.target);
+  run("git", ["commit", "-qm", "repin"], f.target);
 }
 
 test("safe literal parser does not execute Python", () => {
@@ -268,6 +291,8 @@ test("offline exact object audit catalogs, compares, evaluates once, and writes 
   expect(doc.applicationInventory.entries.map((x) => x.path)).toContain("platforms.<name>.*");
   expect(doc.applicationInventory.entries.map((x) => x.path)).toContain("discord.*");
   expect(doc.applicationInventory.diagnostics).toEqual([]);
+  expect(doc.completeness.inventory).toBe("partial-source-role-gaps");
+  expect(doc.sourceRoles.some((role) => !role.required && role.status !== "resolved")).toBe(true);
   expect(doc.applicationInventory.entries.map((x) => x.path)).toContain(
     "mcp_servers.<name>.command",
   );
@@ -321,6 +346,7 @@ test("offline exact object audit catalogs, compares, evaluates once, and writes 
     "provenance",
     "requests",
     "schemaVersion",
+    "sourceRoles",
   ]);
   for (const forbidden of [f.target, f.source]) {
     expect(() =>
@@ -372,13 +398,24 @@ test("normal backend authenticates and uses exact-ref contents API", () => {
   const f = fixture(),
     bin = temporaryDirectory("gh-"),
     state = temporaryDirectory("state-"),
-    log = path.join(bin, "log");
+    log = path.join(bin, "log"),
+    treeResponse = path.join(bin, "tree.json");
   run("git", ["commit", "--allow-empty", "-qm", "latest"], f.source);
   const latestSha = run("git", ["rev-parse", "HEAD"], f.source);
   write(
     bin,
+    "tree.json",
+    JSON.stringify({
+      tree: run("git", ["ls-tree", "-r", "--name-only", f.sha], f.source)
+        .split("\n")
+        .map((pathName) => ({ path: pathName, type: "blob" })),
+      truncated: false,
+    }),
+  );
+  write(
+    bin,
     "gh",
-    `#!/bin/sh\necho "$*" >> '${log}'\n[ "$1 $2" = "auth status" ] && exit 0\n[ "$1" = "--version" ] && exit 0\n[ "$1 $2" = "search code" ] && { printf '%s' '[{"path":"hermes_cli/legacy.py"}]'; exit 0; }\ncase "$2" in *commits/HEAD*) printf '%s' '${latestSha}';; *contents*) p="${f.source}/${"$"}(printf '%s' "$2" | sed -e 's|.*contents/||' -e 's|?ref=.*||')"; base64 < "$p";; *) printf '[]';; esac\n`,
+    `#!/bin/sh\necho "$*" >> '${log}'\n[ "$1 $2" = "auth status" ] && exit 0\n[ "$1" = "--version" ] && exit 0\n[ "$1 $2" = "search code" ] && { printf '%s' '[{"path":"hermes_cli/legacy.py"}]'; exit 0; }\ncase "$2" in *commits/HEAD*) printf '%s' '${latestSha}';; *git/trees*) cat '${treeResponse}';; *contents*) p="${f.source}/${"$"}(printf '%s' "$2" | sed -e 's|.*contents/||' -e 's|?ref=.*||')"; base64 < "$p";; *) printf '[]';; esac\n`,
     0o755,
   );
   run("node", [cli, "audit", "--target-repo", f.target, "--host", "test", "--no-nix"], f.target, {
@@ -409,7 +446,7 @@ test("normal backend authenticates and uses exact-ref contents API", () => {
   );
   const reviewedLog = fs.readFileSync(log, "utf8");
   expect(reviewedLog).not.toMatch(/search code/);
-  expect(reviewedLog).not.toContain(`contents/hermes_cli/legacy.py?ref=${f.sha}`);
+  expect(reviewedLog).toContain(`git/trees/${f.sha}?recursive=1`);
   const latest = run(
     "node",
     [cli, "audit", "--target-repo", f.target, "--host", "latest", "--no-nix", "--latest"],
@@ -425,6 +462,7 @@ test("normal backend authenticates and uses exact-ref contents API", () => {
     removedPaths: [],
     sha: latestSha,
   });
+  expect(latestDoc.requests.githubApi).toBe(15);
   write(bin, "gh", '#!/bin/sh\n[ "$1" = --version ] && exit 0\nexit 1\n', 0o755);
   expect(() =>
     run("node", [cli, "audit", "--target-repo", f.target, "--host", "test", "--no-nix"], f.target, {
@@ -451,7 +489,211 @@ test("schema top-level agrees with reports", () => {
     "provenance",
     "requests",
     "schemaVersion",
+    "sourceRoles",
   ]);
+});
+
+test("semantic roles resolve moved and split sources and reject invalid preferred files", () => {
+  const contents = {
+    "hermes_cli/config_defaults.py": "# stale preferred path",
+    "src/settings/default_values.py": "DEFAULT_CONFIG = {'x': 1}",
+    "src/configuration.py": "_OPEN_DICT_TOP_LEVEL_KEYS = {'x'}",
+    "src/config_merge.py":
+      "def merge(result, key, value):\n  if isinstance(result[key], dict) and value is None: return result",
+    "nix/hermes-module.nix": "options.services.hermes-agent = {};",
+    "src/platform_adapter.py":
+      'x = value.get("text_batch_delay_seconds", 0)\ny = value.get("text_batch_split_delay_seconds", 0)',
+  };
+  const read = (pathName) => contents[pathName] ?? null;
+  const result = resolveSourceRoles(read, Object.keys(contents));
+  expect(result.sourceRoles.find((x) => x.role === "defaults").sources[0].path).toBe(
+    "src/settings/default_values.py",
+  );
+  expect(result.sourceRoles.find((x) => x.role === "config").sources).toHaveLength(2);
+  expect(result.sourceRoles.find((x) => x.role === "platform-adapter").sources).toHaveLength(1);
+  expect(result.sourceRoles.find((x) => x.role === "migrations").status).toBe(
+    "unresolved-no-candidate",
+  );
+});
+
+test("audit follows renamed, moved, and split authoritative sources", () => {
+  const f = fixture(),
+    out = temporaryDirectory("moved-audit-"),
+    oldConfig = fs.readFileSync(path.join(f.source, "hermes_cli/config.py"), "utf8"),
+    splitAt = oldConfig.indexOf("def _deep_merge");
+  fs.renameSync(
+    path.join(f.source, "hermes_cli/config_defaults.py"),
+    path.join(f.source, "hermes_cli/default_values.py"),
+  );
+  fs.writeFileSync(
+    path.join(f.source, "hermes_cli/config_catalog.py"),
+    oldConfig.slice(0, splitAt),
+  );
+  fs.writeFileSync(
+    path.join(f.source, "hermes_cli/config_merge.py"),
+    `print(_KNOWN_KEYS)\n${oldConfig.slice(splitAt)}`,
+  );
+  fs.writeFileSync(path.join(f.source, "hermes_cli/config_extra.py"), '_KNOWN_KEYS = {"region"}\n');
+  fs.rmSync(path.join(f.source, "hermes_cli/config.py"));
+  fs.renameSync(path.join(f.source, "nix/nixosModules.nix"), path.join(f.source, "nix/module.nix"));
+  run("git", ["add", "-A"], f.source);
+  run("git", ["commit", "-qm", "move sources"], f.source);
+  repin(f);
+  const stdout = run(
+      "node",
+      [
+        cli,
+        "audit",
+        "--target-repo",
+        f.target,
+        "--host",
+        "moved",
+        "--source",
+        f.source,
+        "--no-nix",
+        "--output-dir",
+        out,
+      ],
+      f.target,
+    ),
+    doc = JSON.parse(fs.readFileSync(stdout.split("\n")[0]));
+  expect(doc.sourceRoles.find((role) => role.role === "config").sources).toHaveLength(3);
+  expect(
+    doc.applicationInventory.entries.find((entry) => entry.path === "static_flag").evidence.source,
+  ).toBe("hermes_cli/default_values.py");
+  expect(
+    doc.applicationInventory.entries.find((entry) => entry.path === "secrets").evidence.source,
+  ).toBe("hermes_cli/config_merge.py");
+  expect(
+    doc.applicationInventory.entries.find((entry) => entry.path === "providers.<name>.region")
+      .evidence.source,
+  ).toBe("hermes_cli/config_extra.py");
+  expect(doc.moduleInventory.entries[0].evidence.source).toBe("nix/module.nix");
+});
+
+test("audit fails clearly when a foundational role is missing", () => {
+  const f = fixture();
+  fs.rmSync(path.join(f.source, "hermes_cli/config_defaults.py"));
+  run("git", ["add", "-A"], f.source);
+  run("git", ["commit", "-qm", "remove defaults"], f.source);
+  repin(f);
+  expect(() =>
+    run(
+      "node",
+      [
+        cli,
+        "audit",
+        "--target-repo",
+        f.target,
+        "--host",
+        "missing",
+        "--source",
+        f.source,
+        "--no-nix",
+      ],
+      f.target,
+    ),
+  ).toThrow(/required source role defaults is/);
+});
+
+test("semantic roles distinguish required missing and ambiguous authoritative candidates", () => {
+  const contents = {
+    "a/config.py":
+      "_OPEN_DICT_TOP_LEVEL_KEYS = set()\nif isinstance(result[key], dict) and value is None: pass",
+    "b/config.py":
+      "_OPEN_DICT_TOP_LEVEL_KEYS = set()\nif isinstance(result[key], dict) and value is None: pass",
+  };
+  const result = resolveSourceRoles((p) => contents[p], Object.keys(contents));
+  expect(result.sourceRoles.find((x) => x.role === "defaults").required).toBe(true);
+  expect(result.sourceRoles.find((x) => x.role === "defaults").status).toBe(
+    "candidates-found-none-validated",
+  );
+  expect(result.sourceRoles.find((x) => x.role === "config").status).toBe("resolved");
+  expect(result.sourceRoles.find((x) => x.role === "config").sources).toHaveLength(2);
+});
+
+test("single-source roles reject ambiguous authorities", () => {
+  const contents = {
+    "a/defaults.py": "DEFAULT_CONFIG = {'a': 1}",
+    "b/defaults.py": "DEFAULT_CONFIG = {'b': 2}",
+  };
+  const role = resolveSourceRoles((p) => contents[p], Object.keys(contents)).sourceRoles.find(
+    (x) => x.role === "defaults",
+  );
+  expect(role.status).toBe("ambiguous-multiple-authoritative");
+  expect(role.sources).toEqual([]);
+});
+
+test("bounded fallback never claims completeness with uninspected candidates", () => {
+  const contents = Object.fromEntries(
+      Array.from({ length: 13 }, (_, index) => [
+        `moved/defaults-${String(index).padStart(2, "0")}.py`,
+        `DEFAULT_CONFIG = {'value': ${index}}`,
+      ]),
+    ),
+    role = resolveSourceRoles(
+      (pathName) => contents[pathName],
+      Object.keys(contents),
+    ).sourceRoles.find((entry) => entry.role === "defaults");
+  expect(role.status).toBe("extractor-unsupported");
+  expect(role.candidateCount).toBe(13);
+  expect(role.inspectedCount).toBe(12);
+  expect(role.sources).toEqual([]);
+});
+
+test("latest comparison rejects loss of required or optional pinned coverage", () => {
+  const pinned = [
+    { role: "defaults", required: true, status: "resolved" },
+    { role: "skills", required: false, status: "resolved" },
+  ];
+  expect(
+    sourceRoleCoverageGap(pinned, [
+      { role: "defaults", required: true, status: "unresolved-no-candidate" },
+      { role: "skills", required: false, status: "resolved" },
+    ]).role,
+  ).toBe("defaults");
+  expect(
+    sourceRoleCoverageGap(pinned, [
+      { role: "defaults", required: true, status: "resolved" },
+      { role: "skills", required: false, status: "extractor-unsupported" },
+    ]).role,
+  ).toBe("skills");
+});
+
+test("truncated recursive trees use bounded exact subtree traversal", () => {
+  const calls = [];
+  const tree = enumerateGitHubTree((endpoint) => {
+    calls.push(endpoint);
+    if (endpoint.includes("recursive=1")) return { truncated: true, tree: [] };
+    if (endpoint === `git/trees/${"a".repeat(40)}`)
+      return {
+        truncated: false,
+        tree: [
+          { path: "root.py", type: "blob" },
+          { path: "src", sha: "b".repeat(40), type: "tree" },
+        ],
+      };
+    return { truncated: false, tree: [{ path: "config.py", type: "blob" }] };
+  }, "a".repeat(40));
+  expect(tree).toEqual(["root.py", "src/config.py"]);
+  expect(calls).toEqual([
+    `git/trees/${"a".repeat(40)}?recursive=1`,
+    `git/trees/${"a".repeat(40)}`,
+    `git/trees/${"b".repeat(40)}`,
+  ]);
+  expect(() =>
+    enumerateGitHubTree(
+      (endpoint) =>
+        endpoint.includes("recursive=1")
+          ? { truncated: true, tree: [] }
+          : { truncated: false, tree: [{ path: "src", sha: "b".repeat(40), type: "tree" }] },
+      "a".repeat(40),
+      1,
+    ),
+  ).toThrow(/exceeded the 1-subtree bound/);
+  expect(() => enumerateGitHubTree(() => ({ truncated: true, tree: [] }), "a".repeat(40))).toThrow(
+    /truncated non-recursive tree/,
+  );
 });
 
 test("comment-only migration mention is not migration evidence", () => {

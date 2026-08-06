@@ -13,7 +13,9 @@ node scripts/hermes-config-audit.mjs audit --target-repo /path/to/nixos-config -
 ```
 
 It gets owner, repository, and exact SHA from the target's `flake.lock`,
-checks `gh auth status`, reads only targeted files at that SHA through `gh api`,
+checks `gh auth status`, enumerates that SHA's tree once, resolves bounded
+Hermes-specific source roles by semantic signatures, and reads only selected
+files through `gh api`,
 and performs exactly one `nix eval`. It writes mode-0600 JSON and Markdown to
 `$XDG_STATE_HOME/hermes-config-audit` (or `~/.local/state/...`) and prints both
 paths. `--output-dir` may select another directory outside both repositories.

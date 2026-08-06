@@ -7,19 +7,113 @@ import cp from "node:child_process";
 const SKILL = path.resolve(import.meta.dirname, "..");
 const SKILLS_REPO = path.resolve(SKILL, "../..");
 const SHA = /^[0-9a-f]{40}$/;
-const TARGETED = [
-  "hermes_cli/config_defaults.py",
-  "hermes_cli/config.py",
-  "hermes_cli/config_migrations.py",
-  "hermes_cli/mcp_config.py",
-  "nix/nixosModules.nix",
-  "gateway/config.py",
-  "plugins/platforms/whatsapp/adapter.py",
-  "hermes_cli/skills_config.py",
-  "website/docs/user-guide/configuring-models.md",
-  "hermes_cli/cli_commands_mixin.py",
-  "website/docs/user-guide/messaging/index.md",
+const ROLE_SPECS = [
+  {
+    role: "defaults",
+    required: true,
+    preferred: ["hermes_cli/config_defaults.py"],
+    path: /(?:default|config).*\.py$/i,
+    capabilities: { literal: /\bDEFAULT_CONFIG\s*=/ },
+    unsupported: /\b(?:BaseModel|dataclass)\b.*(?:Config|Settings)/s,
+  },
+  {
+    role: "config",
+    required: true,
+    preferred: ["hermes_cli/config.py"],
+    path: /config.*\.py$/i,
+    capabilities: {
+      catalog:
+        /(?:^|\n)\s*(?:_OPEN_DICT_TOP_LEVEL_KEYS|_SCHEMA_DEFINED_DICT_KEYS|_KNOWN_KEYS)(?:\s*:[^=\n]+)?\s*=/,
+      deepMerge:
+        /isinstance\([^\n]+dict\)[^\n]+value is None|value is None[^\n]+isinstance\([^\n]+dict\)/,
+    },
+    multiple: true,
+    unsupported: /\b(?:BaseModel|dataclass)\b.*(?:Config|Settings)/s,
+  },
+  {
+    role: "migrations",
+    required: false,
+    preferred: ["hermes_cli/config_migrations.py"],
+    path: /migrat.*\.py$/i,
+    capabilities: {
+      customProviders:
+        /config\.get\(\s*["']custom_providers["']\s*\)[\s\S]*config\[\s*["']providers["']\s*\]\s*=[\s\S]*config\.pop\(\s*["']custom_providers["']/,
+      disabledPlugins: /plugins_cfg\.get\(\s*["']disabled["']\s*,\s*\[\]\s*\)/,
+    },
+    multiple: true,
+  },
+  {
+    role: "mcp",
+    required: false,
+    preferred: ["hermes_cli/mcp_config.py"],
+    path: /mcp.*\.py$/i,
+    capabilities: { serverFields: /\bserver_config\s*(?:\[|\.get\()/ },
+    multiple: true,
+  },
+  {
+    role: "native-nix-module",
+    required: true,
+    preferred: ["nix/nixosModules.nix"],
+    path: /(?:module|nixos).*\.nix$/i,
+    capabilities: { options: /options\.services\.hermes-agent/ },
+  },
+  {
+    role: "platform-loader",
+    required: false,
+    preferred: ["gateway/config.py"],
+    path: /(?:gateway|platform|config).*\.py$/i,
+    capabilities: {
+      enabled: /plat_data\["enabled"\]\s*=\s*platform_cfg\["enabled"\]/,
+      whatsappFields:
+        /"require_mention" in platform_cfg:[\s\S]*"send_read_receipts" in platform_cfg:/,
+    },
+    multiple: true,
+  },
+  {
+    role: "platform-adapter",
+    required: false,
+    preferred: ["plugins/platforms/whatsapp/adapter.py"],
+    path: /(?:whatsapp|adapter|platform).*\.py$/i,
+    capabilities: {
+      whatsappBatching: /"text_batch_delay_seconds"[\s\S]*"text_batch_split_delay_seconds"/,
+    },
+    multiple: true,
+  },
+  {
+    role: "skills",
+    required: false,
+    preferred: ["hermes_cli/skills_config.py"],
+    path: /skills.*\.py$/i,
+    capabilities: { disabled: /skills_cfg\.get\(\s*["']disabled["']/ },
+    multiple: true,
+  },
+  {
+    role: "model-docs",
+    required: false,
+    preferred: ["website/docs/user-guide/configuring-models.md"],
+    path: /(?:model|config).*(?:\.md|\.mdx)$/i,
+    capabilities: { provider: /written to `model\.provider`/ },
+    multiple: true,
+  },
+  {
+    role: "cli-config",
+    required: false,
+    preferred: ["hermes_cli/cli_commands_mixin.py"],
+    path: /(?:cli|command).*\.py$/i,
+    capabilities: { reasoning: /save_config_value\(["']agent\.reasoning_effort["']/ },
+    multiple: true,
+  },
+  {
+    role: "messaging-docs",
+    required: false,
+    preferred: ["website/docs/user-guide/messaging/index.md"],
+    path: /(?:messag|platform).*(?:\.md|\.mdx)$/i,
+    capabilities: { notifications: /`display\.background_process_notifications`/ },
+    multiple: true,
+  },
 ];
+const BAD_PATH =
+  /(?:^|\/)(?:tests?|fixtures?|generated|translations?|i18n|locales?|examples?|compat(?:ibility)?|legacy|snapshots?|third_party|vendor)(?:\/|$)/i;
 
 const runRaw = (cmd, args, options = {}) =>
   cp.execFileSync(cmd, args, { encoding: "utf8", ...options });
@@ -79,7 +173,7 @@ function sourceReader(source, sha) {
   const root = canonical(source);
   run("git", ["-C", root, "cat-file", "-e", `${sha}^{commit}`]);
   const memo = new Map();
-  return (rel, optional = false) => {
+  const read = (rel, optional = false) => {
     safePath(rel);
     if (memo.has(rel)) {
       return memo.get(rel);
@@ -93,6 +187,36 @@ function sourceReader(source, sha) {
       throw error;
     }
   };
+  read.tree = () =>
+    runRaw("git", ["-C", root, "ls-tree", "-r", "--name-only", sha])
+      .trim()
+      .split("\n")
+      .filter(Boolean);
+  read.stats = { api: 0, search: 0, trees: 1 };
+  return read;
+}
+
+export function enumerateGitHubTree(api, sha, limit = 256) {
+  const recursive = api(`git/trees/${sha}?recursive=1`);
+  if (!recursive.truncated) {
+    return (recursive.tree || []).filter((x) => x.type === "blob").map((x) => x.path);
+  }
+  const files = [],
+    queue = [{ path: "", sha }];
+  for (let visited = 0; queue.length && visited < limit; visited++) {
+    const item = queue.shift(),
+      subtree = api(`git/trees/${item.sha}`);
+    if (subtree.truncated) {
+      throw new Error(`GitHub returned a truncated non-recursive tree for ${item.path || "/"}`);
+    }
+    for (const child of subtree.tree || []) {
+      const childPath = item.path ? `${item.path}/${child.path}` : child.path;
+      if (child.type === "blob") files.push(childPath);
+      else if (child.type === "tree") queue.push({ path: childPath, sha: child.sha });
+    }
+  }
+  if (queue.length) throw new Error(`GitHub tree traversal exceeded the ${limit}-subtree bound`);
+  return files;
 }
 
 function ghReader(owner, repo, sha) {
@@ -129,7 +253,120 @@ function ghReader(owner, repo, sha) {
     }
   };
   read.stats = stats;
+  read.tree = () =>
+    enumerateGitHubTree((endpoint) => {
+      stats.api++;
+      return JSON.parse(
+        runRaw("gh", ["api", `repos/${owner}/${repo}/${endpoint}`], {
+          maxBuffer: 16 * 1024 * 1024,
+        }),
+      );
+    }, sha);
   return read;
+}
+
+export function resolveSourceRoles(read, tree = read.tree()) {
+  const paths = [...new Set(tree)].sort(),
+    results = [],
+    files = {};
+  for (const spec of ROLE_SPECS) {
+    const preferredParts = new Set(
+        spec.preferred.flatMap((value) => value.toLowerCase().split("/")),
+      ),
+      fallbackRank = (candidate) => {
+        const parts = candidate.toLowerCase().split("/"),
+          base = parts.at(-1),
+          preferredBases = spec.preferred.map((value) => value.toLowerCase().split("/").at(-1)),
+          overlap = parts.filter((part) => preferredParts.has(part)).length;
+        return [preferredBases.includes(base) ? 0 : 1, -overlap, parts.length, candidate.length];
+      },
+      compareFallback = (a, b) => {
+        const left = fallbackRank(a),
+          right = fallbackRank(b);
+        for (let index = 0; index < left.length; index++) {
+          if (left[index] !== right[index]) return left[index] - right[index];
+        }
+        return a.localeCompare(b);
+      };
+    const plausible = paths.filter(
+        (candidate) =>
+          spec.preferred.includes(candidate) ||
+          (!BAD_PATH.test(candidate) && spec.path.test(candidate)),
+      ),
+      preferred = plausible.filter((candidate) => spec.preferred.includes(candidate)),
+      fallback = plausible
+        .filter((candidate) => !spec.preferred.includes(candidate))
+        .sort(compareFallback),
+      candidateLimit = 12,
+      inspected = [...preferred],
+      validated = [],
+      unsupported = [];
+    const inspect = (candidate) => {
+      const text = read(candidate, true);
+      if (text == null) return;
+      const capabilities = Object.entries(spec.capabilities)
+        .filter(([, signature]) => signature.test(text))
+        .map(([capability]) => capability);
+      if (capabilities.length) validated.push({ path: candidate, text, capabilities });
+      else if (spec.unsupported?.test(text)) unsupported.push(candidate);
+    };
+    for (const candidate of preferred) inspect(candidate);
+    const preferredCapabilities = new Set(validated.flatMap((candidate) => candidate.capabilities));
+    if (
+      !Object.keys(spec.capabilities).every((capability) => preferredCapabilities.has(capability))
+    ) {
+      for (const candidate of fallback.slice(0, candidateLimit)) {
+        inspected.push(candidate);
+        inspect(candidate);
+      }
+    }
+    const needed = Object.keys(spec.capabilities),
+      supplied = new Set(validated.flatMap((candidate) => candidate.capabilities)),
+      complete = needed.every((capability) => supplied.has(capability)),
+      fallbackTruncated = inspected.length > preferred.length && fallback.length > candidateLimit;
+    let status = plausible.length ? "candidates-found-none-validated" : "unresolved-no-candidate";
+    let selected = [];
+    if (fallbackTruncated) {
+      status = "extractor-unsupported";
+    } else if (complete) {
+      const authorities = validated.filter((candidate) =>
+        needed.every((capability) => candidate.capabilities.includes(capability)),
+      );
+      if (!spec.multiple && authorities.length > 1) {
+        status = "ambiguous-multiple-authoritative";
+      } else {
+        status = "resolved";
+        selected = spec.multiple
+          ? validated.filter((candidate) => candidate.capabilities.length)
+          : authorities.slice(0, 1);
+      }
+    } else if (unsupported.length) {
+      status = "extractor-unsupported";
+    }
+    for (const source of selected) files[source.path] = source.text;
+    results.push({
+      role: spec.role,
+      required: spec.required,
+      status,
+      candidateCount: plausible.length,
+      inspectedCount: inspected.length,
+      sources: selected.map((x) => ({
+        path: x.path,
+        capabilities: x.capabilities,
+        reason: spec.preferred.includes(x.path)
+          ? "preferred path validated by required semantic capabilities"
+          : "exact-tree fallback validated by required semantic capabilities",
+      })),
+    });
+  }
+  return { files, sourceRoles: results };
+}
+
+export function sourceRoleCoverageGap(pinned, candidate) {
+  return candidate.find((candidateRole) => {
+    const pinnedRole = pinned.find((role) => role.role === candidateRole.role);
+    return pinnedRole.status === "resolved" && candidateRole.status !== "resolved";
+  });
 }
 
 function evidence(owner, repo, sha, source, text, needle = "") {
@@ -251,11 +488,20 @@ export function flatten(value, prefix = "", offsets = value?.__sourceOffsets || 
   ];
 }
 
-function applicationInventory(files, provenance) {
-  const defaultsText = files[TARGETED[0]],
-    configText = files[TARGETED[1]] || "",
-    migrationsText = files[TARGETED[2]] || "",
-    mcpText = files[TARGETED[3]] || "",
+function applicationInventory(files, provenance, sourceRoles) {
+  const roleSources = Object.fromEntries(
+      sourceRoles.map((role) => [
+        role.role,
+        role.sources.map((source) => ({ ...source, text: files[source.path] })),
+      ]),
+    ),
+    sources = (role) => roleSources[role] || [],
+    sourceWith = (role, token) =>
+      sources(role).find((source) =>
+        typeof token === "string" ? source.text.includes(token) : token.test(source.text),
+      ),
+    defaultsSource = sources("defaults")[0],
+    defaultsText = defaultsSource.text,
     defaults = parsePyDefault(defaultsText),
     diagnostics = [];
   const entries = flatten(defaults).map((entry) => ({
@@ -268,7 +514,7 @@ function applicationInventory(files, provenance) {
       provenance.owner,
       provenance.repo,
       provenance.resolvedSha,
-      TARGETED[0],
+      defaultsSource.path,
       defaultsText,
       entry.at || 0,
     ),
@@ -308,11 +554,12 @@ function applicationInventory(files, provenance) {
       match.index,
     );
   };
-  const addFields = (root, fields, condition, source, text, declaration, confidence) => {
-    if (!Array.isArray(fields)) {
+  const addFields = (root, collection, condition, declaration, confidence) => {
+    if (!Array.isArray(collection.value)) {
       return;
     }
-    for (const field of fields) {
+    for (const field of collection.value) {
+      const source = collection.members.get(field);
       entries.push({
         path: `${root}.${field}`,
         expected: "source-defined",
@@ -320,12 +567,13 @@ function applicationInventory(files, provenance) {
         dynamic: true,
         confidence,
         migration: "not-indicated",
-        evidence: memberEvidence(source, text, declaration, field),
+        evidence: memberEvidence(source.path, source.text, declaration, field),
       });
     }
   };
-  const addContract = (pathName, source, needle, options = {}) => {
-    if (!files[source]?.includes(needle)) {
+  const addContract = (pathName, role, needle, options = {}) => {
+    const source = sourceWith(role, needle);
+    if (!source) {
       return;
     }
     entries.push({
@@ -336,8 +584,8 @@ function applicationInventory(files, provenance) {
         provenance.owner,
         provenance.repo,
         provenance.resolvedSha,
-        source,
-        files[source],
+        source.path,
+        source.text,
         needle,
       ),
       expected: options.expected || "source-defined",
@@ -357,33 +605,59 @@ function applicationInventory(files, provenance) {
     }
     return fields;
   };
-  const providerFields = literal(configText, "_KNOWN_KEYS"),
-    providerAliases = literal(configText, "_CAMEL_ALIASES") || {},
+  const literalsFromRole = (role, name, object = false) => {
+    const assignment = new RegExp(
+        String.raw`(?:^|\n)\s*${name.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}(?:\s*:[^=\n]+)?\s*=`,
+      ),
+      members = new Map(),
+      value = object ? {} : [];
+    for (const source of sources(role)) {
+      if (!assignment.test(source.text)) continue;
+      const parsed = literal(source.text, name);
+      if (object && parsed && !Array.isArray(parsed)) {
+        for (const [key, child] of Object.entries(parsed)) {
+          if (Object.hasOwn(value, key)) continue;
+          value[key] = child;
+          members.set(key, source);
+        }
+      } else if (!object && Array.isArray(parsed)) {
+        for (const child of parsed) {
+          if (members.has(child)) continue;
+          value.push(child);
+          members.set(child, source);
+        }
+      }
+    }
+    return { members, value: members.size ? value : null };
+  };
+  const providerFieldResult = literalsFromRole("config", "_KNOWN_KEYS"),
+    providerAliasResult = literalsFromRole("config", "_CAMEL_ALIASES", true),
+    providerAliases = providerAliasResult.value || {},
     declaredProviderAliases = new Set(Object.keys(providerAliases)),
-    platforms = literal(configText, "_PLATFORM_CONTAINER_KEYS"),
-    openRoots = literal(configText, "_OPEN_DICT_TOP_LEVEL_KEYS"),
-    schemaRoots = literal(configText, "_SCHEMA_DEFINED_DICT_KEYS"),
-    dynamicRoots = literal(configText, "_DYNAMIC_TOP_LEVEL_KEYS"),
-    mcpFields = usedDictionaryFields(mcpText);
-  if (mcpFields.size === 0 && mcpText.includes("MCP_SERVER_KNOWN_FIELDS")) {
-    const legacyFields = literal(mcpText, "MCP_SERVER_KNOWN_FIELDS") || [];
-    for (const field of legacyFields) {
-      mcpFields.set(field, mcpText.indexOf(field));
+    platformsResult = literalsFromRole("config", "_PLATFORM_CONTAINER_KEYS"),
+    openRootsResult = literalsFromRole("config", "_OPEN_DICT_TOP_LEVEL_KEYS"),
+    schemaRootsResult = literalsFromRole("config", "_SCHEMA_DEFINED_DICT_KEYS"),
+    dynamicRootsResult = literalsFromRole("config", "_DYNAMIC_TOP_LEVEL_KEYS"),
+    mcpFields = new Map();
+  for (const source of sources("mcp")) {
+    const fields = usedDictionaryFields(source.text);
+    if (fields.size === 0 && source.text.includes("MCP_SERVER_KNOWN_FIELDS")) {
+      const legacyFields = literal(source.text, "MCP_SERVER_KNOWN_FIELDS") || [];
+      for (const field of legacyFields) fields.set(field, source.text.indexOf(field));
+    }
+    for (const [field, at] of fields) {
+      if (!mcpFields.has(field)) mcpFields.set(field, { at, field, source });
     }
   }
   addFields(
     "providers.<name>",
-    providerFields,
+    providerFieldResult,
     "when a named custom provider is configured",
-    TARGETED[1],
-    configText,
     "_KNOWN_KEYS",
     "known-consumed-field",
   );
-  if (
-    configText.includes('"api_key_env" in entry') &&
-    !Object.hasOwn(providerAliases, "api_key_env")
-  ) {
+  const providerNormalization = sourceWith("config", '"api_key_env" in entry');
+  if (providerNormalization && !Object.hasOwn(providerAliases, "api_key_env")) {
     providerAliases.api_key_env = "key_env";
   }
   for (const [alias, target] of Object.entries(providerAliases)) {
@@ -395,18 +669,21 @@ function applicationInventory(files, provenance) {
       confidence: "known-consumed-field",
       migration: "renamed-alias",
       evidence: declaredProviderAliases.has(alias)
-        ? memberEvidence(TARGETED[1], configText, "_CAMEL_ALIASES", alias)
+        ? (() => {
+            const source = providerAliasResult.members.get(alias);
+            return memberEvidence(source.path, source.text, "_CAMEL_ALIASES", alias);
+          })()
         : evidence(
             provenance.owner,
             provenance.repo,
             provenance.resolvedSha,
-            TARGETED[1],
-            configText,
+            providerNormalization.path,
+            providerNormalization.text,
             '"api_key_env" in entry',
           ),
     });
   }
-  for (const [field, at] of mcpFields) {
+  for (const { field, at, source } of mcpFields.values()) {
     entries.push({
       path: `mcp_servers.<name>.${field}`,
       expected: "source-defined",
@@ -418,24 +695,25 @@ function applicationInventory(files, provenance) {
         provenance.owner,
         provenance.repo,
         provenance.resolvedSha,
-        TARGETED[3],
-        mcpText,
+        source.path,
+        source.text,
         at,
       ),
     });
   }
-  addContract("mcp_servers.<name>.env.*", TARGETED[3], 'server_config["env"] = explicit_env', {
+  addContract("mcp_servers.<name>.env.*", "mcp", 'server_config["env"] = explicit_env', {
     condition: "when a named stdio MCP server needs environment variables",
     expected: "string environment value",
   });
   for (const [roots, declaration, suffix] of [
-    [openRoots, "_OPEN_DICT_TOP_LEVEL_KEYS", ".*"],
-    [schemaRoots, "_SCHEMA_DEFINED_DICT_KEYS", ".*"],
-    [dynamicRoots, "_DYNAMIC_TOP_LEVEL_KEYS", ".*"],
-    [platforms, "_PLATFORM_CONTAINER_KEYS", ".<name>.*"],
+    [openRootsResult, "_OPEN_DICT_TOP_LEVEL_KEYS", ".*"],
+    [schemaRootsResult, "_SCHEMA_DEFINED_DICT_KEYS", ".*"],
+    [dynamicRootsResult, "_DYNAMIC_TOP_LEVEL_KEYS", ".*"],
+    [platformsResult, "_PLATFORM_CONTAINER_KEYS", ".<name>.*"],
   ]) {
-    if (Array.isArray(roots))
-      for (const root of roots)
+    if (Array.isArray(roots.value))
+      for (const root of roots.value) {
+        const source = roots.members.get(root);
         entries.push({
           path: `${root}${suffix}`,
           expected: "open dictionary value",
@@ -443,14 +721,17 @@ function applicationInventory(files, provenance) {
           dynamic: true,
           confidence: "validation-open-dictionary",
           migration: "not-indicated",
-          evidence: memberEvidence(TARGETED[1], configText, declaration, root),
+          evidence: memberEvidence(source.path, source.text, declaration, root),
         });
+      }
   }
-  if (
-    /config\.get\(\s*["']custom_providers["']\s*\)/.test(migrationsText) &&
-    /config\[\s*["']providers["']\s*\]\s*=/.test(migrationsText) &&
-    /config\.pop\(\s*["']custom_providers["']/.test(migrationsText)
-  ) {
+  const customProviderMigration = sources("migrations").find(
+    (source) =>
+      /config\.get\(\s*["']custom_providers["']\s*\)/.test(source.text) &&
+      /config\[\s*["']providers["']\s*\]\s*=/.test(source.text) &&
+      /config\.pop\(\s*["']custom_providers["']/.test(source.text),
+  );
+  if (customProviderMigration) {
     entries.push({
       path: "custom_providers",
       expected: "array",
@@ -462,28 +743,28 @@ function applicationInventory(files, provenance) {
         provenance.owner,
         provenance.repo,
         provenance.resolvedSha,
-        TARGETED[2],
-        migrationsText,
+        customProviderMigration.path,
+        customProviderMigration.text,
         'config.pop("custom_providers"',
       ),
     });
   }
-  addContract("model.provider", TARGETED[8], "written to `model.provider`", {
+  addContract("model.provider", "model-docs", "written to `model.provider`", {
     condition:
       "after the main model has been configured; the initial model value may be an empty string sentinel",
     expected: "provider name string",
   });
-  addContract("model.default", TARGETED[8], "written to `model.provider`", {
+  addContract("model.default", "model-docs", "written to `model.provider`", {
     condition:
       "after the main model has been configured; the initial model value may be an empty string sentinel",
     expected: "model identifier string",
   });
-  addContract("skills.disabled", TARGETED[7], 'skills_cfg.get("disabled")', {
+  addContract("skills.disabled", "skills", 'skills_cfg.get("disabled")', {
     expected: "array of skill names (a scalar is also normalized as one name)",
   });
   addContract(
     "agent.reasoning_effort",
-    TARGETED[9],
+    "cli-config",
     'save_config_value("agent.reasoning_effort", arg)',
     {
       expected: "reasoning level string",
@@ -492,20 +773,20 @@ function applicationInventory(files, provenance) {
   );
   addContract(
     "display.background_process_notifications",
-    TARGETED[10],
+    "messaging-docs",
     "`display.background_process_notifications`",
     {
       expected: "all, result, error, off, or false",
       condition: "when gateway background-process notifications are configured",
     },
   );
-  addContract("plugins.disabled", TARGETED[2], 'plugins_cfg.get("disabled", [])', {
+  addContract("plugins.disabled", "migrations", 'plugins_cfg.get("disabled", [])', {
     expected: "array of plugin names",
     condition: "when plugins are explicitly denied",
   });
   addContract(
     "platforms.<name>.enabled",
-    TARGETED[5],
+    "platform-loader",
     'plat_data["enabled"] = platform_cfg["enabled"]',
     {
       condition: "for a recognized built-in or registered plugin platform",
@@ -522,18 +803,18 @@ function applicationInventory(files, provenance) {
       "array or comma-separated string of group identifiers",
     ],
   ]) {
-    addContract(`platforms.whatsapp.${field}`, TARGETED[5], needle, {
+    addContract(`platforms.whatsapp.${field}`, "platform-loader", needle, {
       expected,
       condition: "when the WhatsApp platform is configured",
     });
   }
   for (const field of ["text_batch_delay_seconds", "text_batch_split_delay_seconds"]) {
-    addContract(`platforms.whatsapp.extra.${field}`, TARGETED[6], `"${field}",`, {
+    addContract(`platforms.whatsapp.extra.${field}`, "platform-adapter", `"${field}",`, {
       expected: "number of seconds",
       condition: "when WhatsApp text batching is configured",
     });
   }
-  addContract("secrets", TARGETED[1], "and value is None:", {
+  addContract("secrets", "config", "and value is None:", {
     confidence: "explicit-invalid-shape",
     dynamic: false,
     expected: "mapping; null does not replace the default mapping",
@@ -649,7 +930,8 @@ function expressionEnd(code, start, limit) {
   throw new Error("unterminated Nix option metadata expression");
 }
 
-function moduleInventory(text, provenance) {
+function moduleInventory(text, provenance, sourcePath) {
+  const TARGETED = [null, null, null, null, sourcePath];
   const entries = [];
   const code = nixMask(text),
     marker = code.indexOf("options.services.hermes-agent");
@@ -1002,9 +1284,16 @@ export function audit(options) {
   const read = options.source
     ? sourceReader(options.source, resolvedSha)
     : ghReader(locked.owner, locked.repo, resolvedSha);
-  const files = Object.fromEntries(
-    TARGETED.map((sourcePath, index) => [sourcePath, read(sourcePath, index >= 5)]),
+  const resolved = resolveSourceRoles(read),
+    files = resolved.files;
+  const foundationalGap = resolved.sourceRoles.find(
+    (role) => role.required && role.status !== "resolved",
   );
+  if (foundationalGap) {
+    throw new Error(
+      `cannot construct inventory: required source role ${foundationalGap.role} is ${foundationalGap.status} (${foundationalGap.candidateCount} candidates)`,
+    );
+  }
   const provenance = {
     selection: "locked",
     ...locked,
@@ -1015,9 +1304,12 @@ export function audit(options) {
     host: options.host,
     backend: options.source ? "git-object" : "gh-api",
   };
-  const application = applicationInventory(files, provenance),
-    module = moduleInventory(files[TARGETED[4]], provenance),
+  const moduleSource = resolved.sourceRoles.find((role) => role.role === "native-nix-module")
+      .sources[0].path,
+    application = applicationInventory(files, provenance, resolved.sourceRoles),
+    module = moduleInventory(files[moduleSource], provenance, moduleSource),
     local = evaluate(target, options.host, options["no-nix"]);
+  let latestApiRequests = 0;
   if (options.latest) {
     const latestReadForSha = ghReader(locked.owner, locked.repo, resolvedSha),
       latestSha = run("gh", [
@@ -1033,27 +1325,56 @@ export function audit(options) {
         latestSha === resolvedSha
           ? latestReadForSha
           : ghReader(locked.owner, locked.repo, latestSha),
-      latestFiles = Object.fromEntries(
-        TARGETED.map((sourcePath, index) => [sourcePath, latestRead(sourcePath, index >= 5)]),
+      latestResolved = resolveSourceRoles(latestRead),
+      latestFiles = latestResolved.files,
+      latestProvenance = { ...provenance, resolvedSha: latestSha };
+    const latestGap = sourceRoleCoverageGap(resolved.sourceRoles, latestResolved.sourceRoles);
+    if (latestGap) {
+      throw new Error(
+        `cannot compare latest inventory: source role ${latestGap.role} is ${latestGap.status}`,
+      );
+    }
+    const latestModuleSource = latestResolved.sourceRoles.find(
+        (role) => role.role === "native-nix-module",
+      ).sources[0].path,
+      latestApplication = applicationInventory(
+        latestFiles,
+        latestProvenance,
+        latestResolved.sourceRoles,
       ),
-      latestProvenance = { ...provenance, resolvedSha: latestSha },
-      latestApplication = applicationInventory(latestFiles, latestProvenance),
-      latestModule = moduleInventory(latestFiles[TARGETED[4]], latestProvenance);
+      latestModule = moduleInventory(
+        latestFiles[latestModuleSource],
+        latestProvenance,
+        latestModuleSource,
+      );
     provenance.latestSha = latestSha;
     provenance.resolvedAt = new Date().toISOString();
     application.latestComparison = inventoryDiff(application, latestApplication, latestSha);
     module.latestComparison = inventoryDiff(module, latestModule, latestSha);
+    latestApiRequests = 1 + (latestRead.stats?.api || 0);
   }
+  const optionalGaps = resolved.sourceRoles.filter(
+      (role) => !role.required && role.status !== "resolved",
+    ),
+    inventoryCompleteness = optionalGaps.some((role) => role.status === "extractor-unsupported")
+      ? "partial-source-extractor-unsupported"
+      : optionalGaps.length
+        ? "partial-source-role-gaps"
+        : "partial-dynamic-contracts-not-proven-complete";
   const doc = {
     applicationInventory: application,
     comparison: comparison(application, module, local),
     completeness: {
-      inventory: "partial-dynamic-contracts-not-proven-complete",
+      inventory: inventoryCompleteness,
       localComparison: local.available ? "complete-for-evaluated-settings" : "unavailable",
       overall: local.available ? "partial" : "partial-local-evaluation-unavailable",
     },
     limits: [
       application.completeness,
+      ...optionalGaps.map(
+        (role) =>
+          `Optional source role ${role.role}: ${role.status}; ${role.candidateCount} candidates. Inventory completeness is reduced.`,
+      ),
       ...application.diagnostics.map(
         (diagnostic) => `Application contract extraction: ${diagnostic}`,
       ),
@@ -1075,12 +1396,12 @@ export function audit(options) {
     moduleInventory: module,
     provenance,
     requests: {
-      githubApi: read.stats?.api || 0,
+      githubApi: (read.stats?.api || 0) + latestApiRequests,
       githubSearch: read.stats?.search || 0,
     },
-    schemaVersion: 5,
+    schemaVersion: 6,
+    sourceRoles: resolved.sourceRoles,
   };
-  doc.requests.githubApi = read.stats?.api || 0;
   return doc;
 }
 

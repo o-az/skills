@@ -5,6 +5,7 @@
   "required": [
     "schemaVersion",
     "provenance",
+    "sourceRoles",
     "applicationInventory",
     "moduleInventory",
     "local",
@@ -14,7 +15,11 @@
     "limits"
   ],
   "properties": {
-    "schemaVersion": { "const": 5 },
+    "schemaVersion": { "const": 6 },
+    "sourceRoles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sourceRole" }
+    },
     "provenance": {
       "type": "object",
       "additionalProperties": false,
@@ -157,6 +162,42 @@
     "limits": { "type": "array", "items": { "type": "string" } }
   },
   "$defs": {
+    "sourceRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "status", "required", "candidateCount", "inspectedCount", "sources"],
+      "properties": {
+        "role": { "type": "string" },
+        "status": {
+          "enum": [
+            "resolved",
+            "unresolved-no-candidate",
+            "candidates-found-none-validated",
+            "ambiguous-multiple-authoritative",
+            "extractor-unsupported"
+          ]
+        },
+        "required": { "type": "boolean" },
+        "candidateCount": { "type": "integer", "minimum": 0 },
+        "inspectedCount": { "type": "integer", "minimum": 0 },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "reason", "capabilities"],
+            "properties": {
+              "path": { "type": "string" },
+              "reason": { "type": "string" },
+              "capabilities": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
     "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "latestComparison": {
       "type": "object",
