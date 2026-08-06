@@ -5,7 +5,7 @@ license: "GPL-3.0-or-Later"
 compatibility: Requires uv and FFmpeg with libass and libx264 support.
 metadata:
   author: o-az
-  version: "1.2.0"
+  version: "1.3.0"
 ---
 
 # multilingual-caption-video
@@ -23,7 +23,7 @@ Every bundled Python entrypoint has PEP 723 inline script metadata, requires Pyt
 ## Bundled scripts
 
 - `scripts/check_requirements.sh` checks required commands, FFmpeg capabilities, and available package managers without installing anything.
-- `scripts/download.py` streams direct `.mp4` and `.mov` URLs itself, delegates platform webpage URLs to its uv-managed `yt-dlp` dependency, rejects live streams reported by yt-dlp, and prints the final local path.
+- `scripts/download.py` streams direct `.mp4` and `.mov` URLs itself; delegates platform webpage URLs to its uv-managed `yt-dlp` dependency; requires an audio-containing platform format; validates the downloaded file with `ffprobe`; retries once with a combined audio/video format when needed; rejects live streams reported by yt-dlp; and prints the final local path.
 - `scripts/transcribe.py` detects the spoken language, transcribes the video, and emits timestamped JSON.
 - `scripts/style_captions.py` samples the future subtitle band and selects a readable, stable style for each cue.
 - `scripts/make_ass.py` converts translated caption JSON into styled ASS subtitles.
@@ -38,6 +38,7 @@ Run any Python script with `uv run --script <script> --help` so uv honors its de
 - Accept either an explicit local video path or an explicit `http://` or `https://` video URL.
 - Reject explicit URL inputs whose initial host resolves to loopback, private, link-local, or cloud-metadata addresses. Apply the same check to redirects while downloading direct `.mp4` or `.mov` URLs. For platform webpage URLs, validate the initial page URL and then delegate extractor-controlled requests to yt-dlp on a best-effort basis; platform support is not guaranteed.
 - Reject live-stream webpage entries reported by yt-dlp.
+- Do not conclude that the user shared a silent video merely because a downloaded file has no audio stream. This is more likely a download API, extractor, or format-selection problem—especially when a platform offers separate or video-only renditions. Treat it as a failed download: require an audio codec, retry another audio-containing format, and verify the resulting file with `ffprobe` before making any claim about the source.
 - Never overwrite or delete the source video.
 - Do not attach cookies, credentials, or authentication headers when downloading a URL unless the user explicitly requests it.
 - Preserve meaning and timing. Do not summarize, censor, embellish, or invent speech.
@@ -45,6 +46,7 @@ Run any Python script with `uv run --script <script> --help` so uv honors its de
 - When neither the request nor saved preferences specify a size, let `scripts/make_ass.py` scale it from the video dimensions. Always honor an explicit user choice.
 - Use an installed medium-weight sans-serif font that covers the target script. For Latin text, prefer Arial, Helvetica, Roboto, DejaVu Sans, or Liberation Sans. For Arabic, prefer Arial, Noto Sans Arabic, Geeza Pro, SF Arabic, or another installed Arabic-capable sans-serif.
 - Deliver only the generated MP4.
+- When the user asks to send the video, a text response or local path alone is not delivery. Use the current platform's supported file-delivery or attachment API to send the actual MP4, and do not say it was sent unless that call succeeds. An API success confirms only that the platform accepted the request, not that the requester received the attachment.
 - Write preferences only after explicit consent. An explicit request always overrides a saved preference for that job.
 - Delete only marked working directories created by `scripts/cleanup.py`.
 - Run bundled scripts as the current unprivileged user. Never invoke them through `sudo` or another privilege-elevation mechanism.
@@ -116,13 +118,13 @@ For a local file, resolve its absolute path and verify it is a regular video fil
 SOURCE="$(uv run --script "$SKILL_ROOT/scripts/download.py" "<VIDEO_URL>" "$WORK_DIR")"
 ```
 
-For URLs whose path ends in `.mp4` or `.mov`, the downloader streams the response directly and validates each redirect host. For other URLs, it validates the initial page host and delegates to yt-dlp with playlists and live streams disabled. Platform extraction is best-effort and may fail when a site is unsupported, requires authentication, or changes its interface. Both paths write only inside the marked work directory and report the final local path. Platform downloads retain yt-dlp's title and media ID. Probe the source, including any existing title metadata:
+For URLs whose path ends in `.mp4` or `.mov`, the downloader streams the response directly and validates each redirect host. For other URLs, it validates the initial page host and delegates to yt-dlp with playlists and live streams disabled. The platform downloader prefers separate best video and audio streams that can be merged, falls back only to a combined format whose video and audio codecs are both present, verifies the downloaded file with `ffprobe`, and retries once with an explicitly combined audio/video format if the first file has no audio stream. Platform extraction is best-effort and may fail when a site is unsupported, requires authentication, or changes its interface. Both paths write only inside the marked work directory and report the final local path. Platform downloads retain yt-dlp's title and media ID. Probe the source, including any existing title metadata:
 
 ```bash
 ffprobe -v error -show_entries format=duration:format_tags=title:stream=codec_type,codec_name,width,height:stream_side_data=rotation -of json "<SOURCE>"
 ```
 
-Stop with a clear error when the source has no video stream or no audio stream.
+Stop with a clear error when the source has no video stream. For a local source that has no audio stream, report that fact to the user. For a downloaded source that has no audio stream, do **not** report that the user-provided video itself is silent. First treat it as a download failure: inspect the platform's available formats, select one whose `ACODEC` is not `none` (or merge `bestvideo+bestaudio`), download again, and verify the new file with `ffprobe`. `scripts/download.py` performs this validation and one audio-required retry automatically for platform URLs. If that retry still fails, explain that the extractor or selected rendition may have omitted the audio and retain the work directory long enough to diagnose and try the available audio-containing formats. Only after multiple appropriate attempts have exhausted those options should you ask the user to verify that the video at the shared link plays with audio and, if possible, provide an alternate URL or local source.
 
 Resolve `ORIGINAL_TITLE` for the output metadata. Prefer a non-empty `format.tags.title` from the probe. Otherwise use the local source filename stem, the decoded direct-URL filename stem, or the yt-dlp title in the downloaded filename with its final ` [<media-id>]` removed. Preserve spaces, emoji, and other Unicode in this metadata value; do not include it in the delivered filename.
 
@@ -211,7 +213,7 @@ Confirm that captions are present, correctly shaped, legible, inside the safe ar
 
 ### 9. Deliver the file
 
-Copy the verified MP4 to the operating system's Downloads directory, then deliver that permanent file without uploading it. Use the target language's lowercase ISO or BCP 47 code for `<LANGUAGE_CODE>`:
+Copy the verified MP4 to the operating system's Downloads directory. This permanent copy is the delivery artifact and remains available for retries. Use the target language's lowercase ISO or BCP 47 code for `<LANGUAGE_CODE>`:
 
 ```bash
 DELIVERED="$(uv run --script "$SKILL_ROOT/scripts/deliver.py" "$WORK_DIR/captioned.mp4" "<LANGUAGE_CODE>")"
@@ -219,7 +221,15 @@ DELIVERED="$(uv run --script "$SKILL_ROOT/scripts/deliver.py" "$WORK_DIR/caption
 
 The resulting name is `<language-code>_YYYY-MM-DD_HH.mm.ss.mp4`, using the local delivery time, for example `es_2026-07-31_02.52.58.mp4`. If that exact second already exists, the script advances the filename timestamp one second at a time until an unused name is available; it never overwrites another file. It uses the Windows Downloads known folder with the Desktop as its Windows fallback, the configured XDG Downloads directory on Linux when available, and `~/Downloads` otherwise. If that directory cannot be created or written, report the issue and fall back to the platform's normal file-delivery or attachment capability from the work directory.
 
-Return the permanent path printed by `deliver.py`, not the temporary work-directory MP4. Include the target language, and do not claim completion without a successful probe and visual inspection.
+When the user asked to send or return the video in the conversation, invoke the current messaging platform's default supported file-delivery or attachment API with `DELIVERED`; do not respond with only the path or completion text. Use the platform-specific API rather than assuming one messaging platform's upload method works on another. Check the tool or API response for an accepted attachment and record any returned message, file, or attachment identifier. Do not claim that receipt is confirmed merely because the API returned success.
+
+After an accepted send, include this proactive receipt check, adapted naturally to the platform:
+
+> I've sent the captioned video using this platform's default file-delivery method. If you received it, you're all set—no reply is needed. If it has not appeared, please let me know; file delivery can occasionally fail even after the API reports success. I'll inspect the delivery response and available logs, then retry with another supported file-delivery method.
+
+If the requester reports that the video did not arrive, do not leave the conversation at a text-only response and do not rerender the video unnecessarily. Confirm that `DELIVERED` still exists and is non-empty, inspect the original delivery response and available platform logs for upload limits or API errors, then retry using another supported attachment or file-upload route. Report the new attempt honestly and repeat the receipt check. If no alternative route is available, say so clearly and offer the permanent local file through any supported link or attachment mechanism rather than claiming it was sent.
+
+Return or expose the permanent path printed by `deliver.py`, not the temporary work-directory MP4. Include the target language, and do not claim completion without a successful probe, visual inspection, and—when sending was requested—an accepted file-delivery call.
 
 In the successful result, tell the user: “I used font <FONT>, which was available on your system. If you'd like to use a different font or size, or another subtitle style, let me know.” Substitute the actual selected font name.
 
