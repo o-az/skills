@@ -30,5 +30,5 @@ authenticated `gh` even when pinned reads use `--source`.
 The target only needs to be a readable directory containing `flake.lock`; Git
 history is not required. Never execute upstream Python,
 realize/build/switch/deploy/restart Nix, or infer
-invalidity merely from absence in defaults. Read [surfaces](reference/surfaces.md)
-and [output schema](reference/output-schema.md) when interpreting results.
+invalidity merely from absence in defaults. Read [surfaces](./reference/surfaces.md)
+and [output schema](./reference/output-schema.md) when interpreting results.
