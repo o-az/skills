@@ -1,0 +1,297 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "provenance",
+    "sourceRoles",
+    "applicationInventory",
+    "moduleInventory",
+    "local",
+    "comparison",
+    "completeness",
+    "requests",
+    "limits"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 6 },
+    "sourceRoles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sourceRole" }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection",
+        "lockedSha",
+        "resolvedSha",
+        "owner",
+        "repo",
+        "targetRepo",
+        "host",
+        "backend"
+      ],
+      "properties": {
+        "selection": { "enum": ["locked", "latest"] },
+        "lockedSha": { "$ref": "#/$defs/sha" },
+        "resolvedSha": { "$ref": "#/$defs/sha" },
+        "owner": { "type": "string", "minLength": 1 },
+        "repo": { "type": "string", "minLength": 1 },
+        "targetRepo": { "type": "string", "minLength": 1 },
+        "host": { "type": "string", "minLength": 1 },
+        "backend": { "enum": ["gh-api", "git-object"] },
+        "latestSha": { "$ref": "#/$defs/sha" },
+        "resolvedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "applicationInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries", "diagnostics", "completeness"],
+      "properties": {
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/applicationEntry" } },
+        "diagnostics": { "type": "array", "items": { "type": "string" } },
+        "completeness": { "type": "string" },
+        "latestComparison": { "$ref": "#/$defs/latestComparison" }
+      }
+    },
+    "moduleInventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries", "completeness"],
+      "properties": {
+        "entries": { "type": "array", "items": { "$ref": "#/$defs/moduleEntry" } },
+        "completeness": { "type": "string" },
+        "latestComparison": { "$ref": "#/$defs/latestComparison" }
+      }
+    },
+    "local": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["available", "reason"],
+          "properties": { "available": { "const": false }, "reason": { "type": "string" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "available",
+            "enabled",
+            "mode",
+            "configFileSet",
+            "nativeShape",
+            "applicationShape"
+          ],
+          "properties": {
+            "available": { "const": true },
+            "enabled": { "type": "boolean" },
+            "mode": { "enum": ["disabled", "generated", "configFile"] },
+            "configFileSet": { "type": "boolean" },
+            "nativeShape": { "type": "object" },
+            "applicationShape": { "type": ["object", "null"] }
+          }
+        }
+      ]
+    },
+    "comparison": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["available", "reason"],
+          "properties": { "available": { "const": false }, "reason": { "type": "string" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "available",
+            "applicationAvailable",
+            "presentInGeneratedOverride",
+            "applicationResults",
+            "catalogPathsAbsentFromGeneratedOverride",
+            "applicationMismatches",
+            "presentInEvaluatedNativeShape",
+            "catalogPathsAbsentFromEvaluatedNativeShape",
+            "moduleMismatches"
+          ],
+          "properties": {
+            "available": { "const": true },
+            "applicationAvailable": { "type": "boolean" },
+            "applicationReason": { "type": "string" },
+            "presentInGeneratedOverride": { "type": "array", "items": { "type": "string" } },
+            "applicationResults": { "type": "array", "items": { "$ref": "#/$defs/mismatch" } },
+            "catalogPathsAbsentFromGeneratedOverride": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "applicationMismatches": { "type": "array", "items": { "$ref": "#/$defs/mismatch" } },
+            "presentInEvaluatedNativeShape": { "type": "array", "items": { "type": "string" } },
+            "catalogPathsAbsentFromEvaluatedNativeShape": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "moduleMismatches": { "type": "array", "items": { "$ref": "#/$defs/mismatch" } }
+          }
+        }
+      ]
+    },
+    "completeness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["overall", "localComparison", "inventory"],
+      "properties": {
+        "overall": { "type": "string" },
+        "localComparison": { "type": "string" },
+        "inventory": { "type": "string" }
+      }
+    },
+    "requests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["githubApi", "githubSearch"],
+      "properties": {
+        "githubApi": { "type": "integer", "minimum": 0 },
+        "githubSearch": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "limits": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "sourceRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "status", "required", "candidateCount", "inspectedCount", "sources"],
+      "properties": {
+        "role": { "type": "string" },
+        "status": {
+          "enum": [
+            "resolved",
+            "unresolved-no-candidate",
+            "candidates-found-none-validated",
+            "ambiguous-multiple-authoritative",
+            "extractor-unsupported"
+          ]
+        },
+        "required": { "type": "boolean" },
+        "candidateCount": { "type": "integer", "minimum": 0 },
+        "inspectedCount": { "type": "integer", "minimum": 0 },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "reason", "capabilities"],
+            "properties": {
+              "path": { "type": "string" },
+              "reason": { "type": "string" },
+              "capabilities": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "latestComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha", "addedPaths", "removedPaths", "changedPaths"],
+      "properties": {
+        "sha": { "$ref": "#/$defs/sha" },
+        "addedPaths": { "type": "array", "items": { "type": "string" } },
+        "removedPaths": { "type": "array", "items": { "type": "string" } },
+        "changedPaths": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "line", "url", "excerpt"],
+      "properties": {
+        "source": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "url": { "type": "string" },
+        "excerpt": { "type": "string" }
+      }
+    },
+    "applicationEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "expected",
+        "condition",
+        "dynamic",
+        "confidence",
+        "migration",
+        "evidence"
+      ],
+      "properties": {
+        "path": { "type": "string" },
+        "default": {},
+        "defaultShape": { "type": "string" },
+        "expected": { "type": "string" },
+        "condition": { "type": "string" },
+        "dynamic": { "type": "boolean" },
+        "confidence": {
+          "enum": [
+            "base-default",
+            "known-consumed-field",
+            "validation-open-dictionary",
+            "explicit-migration",
+            "explicit-invalid-shape"
+          ]
+        },
+        "migration": { "type": "string" },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "moduleEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "type", "default", "example", "description", "mapping", "evidence"],
+      "properties": {
+        "path": { "type": "string" },
+        "type": { "type": ["string", "null"] },
+        "default": {},
+        "example": {},
+        "description": { "type": ["string", "null"] },
+        "mapping": {
+          "enum": ["service-behavior", "generates-application-config", "selects-application-config"]
+        },
+        "evidence": { "$ref": "#/$defs/evidence" }
+      }
+    },
+    "mismatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "type", "classification"],
+      "properties": {
+        "path": { "type": "string" },
+        "type": { "type": "string" },
+        "expected": { "type": "string" },
+        "classification": {
+          "enum": [
+            "current",
+            "valid-dynamic-extension",
+            "wrong-shape",
+            "deprecated-or-migrated",
+            "obsolete-or-wrong-shape",
+            "invalid-or-ignored",
+            "ignored-or-nonexistent",
+            "uncertain-needs-targeted-review"
+          ]
+        },
+        "evidence": { "$ref": "#/$defs/evidence" },
+        "candidates": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+      }
+    }
+  }
+}

@@ -6,32 +6,32 @@ import * as NodeChildProcess from "node:child_process";
 
 const requiredCommands = [
   {
-    tool: "asciinema",
     description: "recording terminal sessions",
     installInstructions: "https://docs.asciinema.org/manual/cli/installation/",
+    tool: "asciinema",
   },
   {
-    tool: "agg",
     description: "rendering GIFs from .cast files",
     installInstructions: "https://docs.asciinema.org/manual/agg/installation/",
+    tool: "agg",
   },
   {
-    tool: "curl",
     description: "uploading casts and optional GIF hosting",
     installInstructions: "https://curl.se/download.html",
+    tool: "curl",
   },
   {
-    tool: "jq",
     description: "printing structured JSON results from helper scripts",
     installInstructions: "https://jqlang.org/download/",
+    tool: "jq",
   },
 ];
 
 const optionalKeys = [
   {
-    key: "IBB_API_KEY",
     description: "needed only when hosting GIFs with `scripts/finalize-recording.sh --upload-gif`",
     installInstructions: "https://api.imgbb.com/#api-upload",
+    key: "IBB_API_KEY",
   },
 ];
 
@@ -39,13 +39,15 @@ const optionalKeys = [
 function findCommand(command) {
   const pathValue = process.env.PATH ?? "";
   for (const dir of pathValue.split(NodePath.delimiter)) {
-    if (!dir) continue;
+    if (!dir) {
+      continue;
+    }
     const candidate = NodePath.join(dir, command);
     try {
       NodeFS.accessSync(candidate, NodeFS.constants.X_OK);
       return candidate;
     } catch {
-      // keep searching PATH
+      // Keep searching PATH
     }
   }
 
@@ -55,8 +57,8 @@ function findCommand(command) {
 /** @type {(command: string) => string} */
 function readCommandVersion(command) {
   const attempts = {
-    asciinema: [["--version"]],
     agg: [["--version"]],
+    asciinema: [["--version"]],
     curl: [["--version"]],
     jq: [["--version"]],
   }[command] ?? [["--version"], ["-V"], ["version"]];
@@ -65,9 +67,11 @@ function readCommandVersion(command) {
     try {
       const output = NodeChildProcess.execFileSync(command, args, { encoding: "utf8" }).trim();
       const line = output.split("\n")[0]?.trim();
-      if (line) return line;
+      if (line) {
+        return line;
+      }
     } catch {
-      // try next variant
+      // Try next variant
     }
   }
 
