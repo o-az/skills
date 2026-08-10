@@ -440,7 +440,12 @@ print(json.dumps({"value": read(node), "offsets": offsets}))
 export function parsePyDefault(text, name = "DEFAULT_CONFIG") {
   let parsed;
   try {
-    parsed = JSON.parse(runRaw("python3", ["-c", PY_LITERAL, name], { input: text }));
+    parsed = JSON.parse(
+      runRaw("uv", ["run", "--no-project", "python", "-c", PY_LITERAL, name], {
+        input: text,
+        stdio: ["pipe", "pipe", "pipe"],
+      }),
+    );
   } catch (error) {
     throw new Error(String(error.stderr || error.message).trim(), { cause: error });
   }

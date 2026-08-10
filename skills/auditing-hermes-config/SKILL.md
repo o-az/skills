@@ -1,7 +1,7 @@
 ---
 name: auditing-hermes-config
 description: Audits exact-revision Hermes application options, native NixOS module options, and one host's evaluated configuration.
-compatibility: Requires Node.js 20+, Python 3, GitHub CLI authentication, and normally Nix.
+compatibility: Requires Node.js 20+, uv, GitHub CLI authentication, and normally Nix.
 ---
 
 # Auditing Hermes Config
